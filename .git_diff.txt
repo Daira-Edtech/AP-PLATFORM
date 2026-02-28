@@ -1,0 +1,2254 @@
+﻿diff --git a/src/app/admin/dashboard/page.tsx b/src/app/admin/dashboard/page.tsx
+index 2170524..33d6782 100644
+--- a/src/app/admin/dashboard/page.tsx
++++ b/src/app/admin/dashboard/page.tsx
+@@ -1,3 +1,234 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++
++export default async function DashboardPage() {
++    const supabase = await createClient()
++
++    // Fetch all counts in parallel
++    const [
++        { count: totalUsers },
++        { count: totalChildren },
++        { count: totalAWCs },
++        { count: totalFlags },
++        { count: totalQuestions },
++        { count: totalActivities },
++        { data: recentAuditLogs },
++        { data: recentAlerts },
++    ] = await Promise.all([
++        supabase.from('profiles').select('*', { count: 'exact', head: true }),
++        supabase.from('children').select('*', { count: 'exact', head: true }),
++        supabase.from('awcs').select('*', { count: 'exact', head: true }),
++        supabase.from('flags').select('*', { count: 'exact', head: true }).eq('status', 'raised'),
++        supabase.from('questions').select('*', { count: 'exact', head: true }),
++        supabase.from('activities').select('*', { count: 'exact', head: true }),
++        supabase.from('audit_log').select('*').order('timestamp', { ascending: false }).limit(5),
++        supabase.from('alerts').select('*').eq('is_read', false).order('created_at', { ascending: false }).limit(5),
++    ])
++
++    const stats = [
++        {
++            label: 'Total Users',
++            value: totalUsers ?? 0,
++            subtext: `${totalUsers ?? 0} active`,
++            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
++            color: 'text-blue-600',
++            bg: 'bg-blue-50',
++            dot: 'bg-blue-500'
++        },
++        {
++            label: 'Children Enrolled',
++            value: totalChildren ?? 0,
++            subtext: 'Across all districts',
++            icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
++            color: 'text-green-600',
++            bg: 'bg-green-50',
++            dot: 'bg-green-500'
++        },
++        {
++            label: 'AWCs Active',
++            value: totalAWCs ?? 0,
++            subtext: 'Reporting daily',
++            icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
++            color: 'text-purple-600',
++            bg: 'bg-purple-50',
++            dot: 'bg-purple-500'
++        },
++        {
++            label: 'Open Flags',
++            value: totalFlags ?? 0,
++            subtext: 'Requires attention',
++            icon: 'M3 21v-8a2 2 0 01-2-1.85V19a2 2 0 104 0v-1.85a4 4 0 008 0v1.85a2 2 0 104 0v-1.85A4 4 0 0022 19v-6a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
++            color: 'text-red-600',
++            bg: 'bg-red-50',
++            dot: 'bg-red-500'
++        },
++    ]
++
++    const systemMetrics = [
++        { label: 'Uptime', value: '99.8%', status: 'Healthy', color: 'text-green-500', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
++        { label: 'Sync Queue', value: '342', status: 'Processing', color: 'text-amber-500', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
++        { label: 'Errors (24h)', value: '0', status: 'Optimal', color: 'text-emerald-500', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
++        { label: 'Database', value: '2.1 GB', status: 'Capacity 10%', color: 'text-blue-500', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
++    ]
++
++    return (
++        <div className="space-y-8 max-w-7xl mx-auto">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Admin Dashboard</h1>
++                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">System overview and user health</p>
++                </div>
++                <div className="flex gap-3">
++                    <button className="px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-700 transition-colors">
++                        Export Report
++                    </button>
++                    <button className="px-4 py-2 text-sm font-medium text-white bg-black rounded-lg hover:bg-zinc-800 transition-colors">
++                        Add User
++                    </button>
++                </div>
++            </div>
++
++            {/* Main Stats Grid */}
++            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
++                {stats.map((stat) => (
++                    <div
++                        key={stat.label}
++                        className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 relative overflow-hidden group hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
++                    >
++                        <div className={`absolute top-4 right-4 w-2 h-2 rounded-full ${stat.dot}`}></div>
++                        <div className="flex items-start justify-between">
++                            <div>
++                                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{stat.label}</p>
++                                <h3 className="text-3xl font-bold text-zinc-900 dark:text-white mt-2">{stat.value.toLocaleString()}</h3>
++                                <p className="text-xs text-zinc-400 mt-1">{stat.subtext}</p>
++                            </div>
++                            <div className={`p-3 rounded-lg ${stat.bg} ${stat.color} bg-opacity-50 dark:bg-opacity-10`}>
++                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={stat.icon} />
++                                </svg>
++                            </div>
++                        </div>
++                    </div>
++                ))}
++            </div>
++
++            {/* System Metrics */}
++            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
++                {systemMetrics.map((metric) => (
++                    <div key={metric.label} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-4">
++                        <div className={`p-2 rounded-full bg-zinc-50 dark:bg-zinc-800 ${metric.color}`}>
++                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={metric.icon} />
++                            </svg>
++                        </div>
++                        <div>
++                            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{metric.label}</p>
++                            <div className="flex items-baseline gap-2">
++                                <span className="text-lg font-bold text-zinc-900 dark:text-white">{metric.value}</span>
++                                <span className={`text-xs ${metric.color}`}>{metric.status}</span>
++                            </div>
++                        </div>
++                    </div>
++                ))}
++            </div>
++
++            {/* Splits: Assignment Status & Recent Actions */}
++            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
++                {/* Assignment Status */}
++                <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
++                    <div className="flex items-center justify-between mb-6">
++                        <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Assignment Status</h3>
++                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
++                            171 unassigned users
++                        </span>
++                    </div>
++
++                    <div className="space-y-6">
++                        {[
++                            { label: 'AWWs', total: 8500, assigned: 8340, color: 'bg-emerald-500' },
++                            { label: 'Mandal Screeners', total: 420, assigned: 412, color: 'bg-emerald-500' },
++                            { label: 'CDPOs', total: 68, assigned: 65, color: 'bg-emerald-500' },
++                            { label: 'DPOs', total: 13, assigned: 13, color: 'bg-emerald-500' },
++                        ].map((item) => (
++                            <div key={item.label}>
++                                <div className="flex justify-between text-sm mb-2">
++                                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{item.label}</span>
++                                    <div className="text-zinc-500 text-xs">
++                                        <span className="font-bold text-zinc-900 dark:text-white">{item.assigned.toLocaleString()}</span> assigned
++                                        <span className="mx-1.5 text-zinc-300">|</span>
++                                        <span className="text-red-500 font-medium">{(item.total - item.assigned).toLocaleString()} unassigned</span>
++                                    </div>
++                                </div>
++                                <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
++                                    <div
++                                        className={`h-full ${item.color} rounded-full transition-all duration-500`}
++                                        style={{ width: `${(item.assigned / item.total) * 100}%` }}
++                                    ></div>
++                                </div>
++                            </div>
++                        ))}
++                    </div>
++
++                    <button className="w-full mt-8 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center justify-center gap-2 transition-colors">
++                        Fix assignments
++                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
++                        </svg>
++                    </button>
++                </div>
++
++                {/* Recent Actions */}
++                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
++                    <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-6">Recent Admin Actions</h3>
++
++                    <div className="space-y-6">
++                        {recentAuditLogs?.length ? recentAuditLogs.map((log) => (
++                            <div key={log.id} className="flex gap-4">
++                                <div className="w-8 h-8 rounded-full bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-100 dark:border-zinc-700">
++                                    <span className="text-xs font-bold text-zinc-500">AL</span>
++                                </div>
++                                <div>
++                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{log.action}</p>
++                                    <div className="flex items-center gap-2 mt-1">
++                                        <span className="text-xs text-zinc-500 uppercase tracking-wider">{log.user_role || 'System'}</span>
++                                        <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
++                                        <span className="text-xs text-zinc-400">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
++                                    </div>
++                                </div>
++                            </div>
++                        )) : (
++                            <div className="text-center py-8 text-zinc-400 text-sm">No recent actions recorded</div>
++                        )}
++
++                        {/* Mock data to fill UI if empty */}
++                        {!recentAuditLogs?.length && [
++                            { action: 'Created AWW account: Lakshmi D.', user: 'ADMIN.RAVI', time: '2h ago', icon: '+' },
++                            { action: 'Reassigned CDPO Dr. Meena', user: 'ADMIN.RAM', time: '5h ago', icon: 'ΓåÆ' },
++                            { action: 'Bulk imported 45 AWWs (CSV)', user: 'ADMIN.PRIYA', time: '1d ago', icon: 'Γ¡│' },
++                        ].map((item, i) => (
++                            <div key={i} className="flex gap-4">
++                                <div className="w-8 h-8 rounded-full bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-100 dark:border-zinc-700 text-zinc-500 font-bold text-xs">
++                                    {item.icon}
++                                </div>
++                                <div>
++                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{item.action}</p>
++                                    <div className="flex items-center gap-2 mt-1">
++                                        <span className="text-xs text-zinc-500 uppercase tracking-wider">{item.user}</span>
++                                        <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
++                                        <span className="text-xs text-zinc-400">{item.time}</span>
++                                    </div>
++                                </div>
++                            </div>
++                        ))}
++                    </div>
++
++                    <button className="w-full mt-8 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white flex items-center justify-center gap-2 transition-colors">
++                        View audit log
++                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
++                        </svg>
++                    </button>
++                </div>
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/awcs/[id]/page.tsx b/src/app/admin/geography/awcs/[id]/page.tsx
+index 2170524..9d997ce 100644
+--- a/src/app/admin/geography/awcs/[id]/page.tsx
++++ b/src/app/admin/geography/awcs/[id]/page.tsx
+@@ -1,3 +1,175 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++
++export default async function EditAWCPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++    const isNew = id === 'new'
++
++    const [
++        { data: mandals },
++        { data: sectors },
++        { data: panchayats },
++    ] = await Promise.all([
++        supabase.from('mandals').select('*').order('name'),
++        supabase.from('sectors').select('*').order('name'),
++        supabase.from('panchayats').select('*').order('name'),
++    ])
++
++    const { data: awc } = isNew
++        ? { data: null }
++        : await supabase.from('awcs').select('*').eq('id', id).single()
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        const payload = {
++            name: formData.get('name') as string,
++            code: formData.get('code') as string,
++            village_name: formData.get('village_name') as string,
++            mandal_id: formData.get('mandal_id') as string,
++            sector_id: formData.get('sector_id') as string,
++            panchayat_id: formData.get('panchayat_id') as string || null,
++            target_children: parseInt(formData.get('target_children') as string) || 40,
++            is_active: formData.get('is_active') === 'true',
++        }
++
++        if (isNew) {
++            await supabase.from('awcs').insert(payload)
++        } else {
++            await supabase.from('awcs').update(payload).eq('id', id)
++        }
++
++        redirect('/admin/geography/awcs')
++    }
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">
++                {isNew ? 'Add AWC' : 'Edit AWC'}
++            </h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
++                    <input
++                        name="name"
++                        defaultValue={awc?.name ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Rampur AWC 1"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
++                    <input
++                        name="code"
++                        defaultValue={awc?.code ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. AWC-KDP-S1-RMP-01"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Village Name</label>
++                    <input
++                        name="village_name"
++                        defaultValue={awc?.village_name ?? ''}
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Rampur"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Mandal</label>
++                    <select
++                        name="mandal_id"
++                        defaultValue={awc?.mandal_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select mandal</option>
++                        {mandals?.map((m) => (
++                            <option key={m.id} value={m.id}>{m.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Sector</label>
++                    <select
++                        name="sector_id"
++                        defaultValue={awc?.sector_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select sector</option>
++                        {sectors?.map((s) => (
++                            <option key={s.id} value={s.id}>{s.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Panchayat</label>
++                    <select
++                        name="panchayat_id"
++                        defaultValue={awc?.panchayat_id ?? ''}
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select panchayat (optional)</option>
++                        {panchayats?.map((p) => (
++                            <option key={p.id} value={p.id}>{p.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Target Children</label>
++                    <input
++                        name="target_children"
++                        type="number"
++                        defaultValue={awc?.target_children ?? 40}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
++                    <select
++                        name="is_active"
++                        defaultValue={awc?.is_active === false ? 'false' : 'true'}
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="true">Active</option>
++                        <option value="false">Inactive</option>
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        {isNew ? 'Create AWC' : 'Save Changes'}
++                    </button>
++
++                    <a
++                        href="/admin/geography/awcs"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/awcs/page.tsx b/src/app/admin/geography/awcs/page.tsx
+index 2170524..dfeb37f 100644
+--- a/src/app/admin/geography/awcs/page.tsx
++++ b/src/app/admin/geography/awcs/page.tsx
+@@ -1,3 +1,85 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function AWCsPage() {
++    const supabase = await createClient()
++
++    const { data: awcs } = await supabase
++        .from('awcs')
++        .select(`
++      *,
++      mandals(name),
++      sectors(name),
++      panchayats(name)
++    `)
++        .order('name')
++
++    return (
++        <div className="space-y-6">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">AWCs</h1>
++                    <p className="text-sm text-slate-500 mt-1">{awcs?.length ?? 0} Anganwadi Centres total</p>
++                </div>
++                <Link
++                    href="/admin/geography/awcs/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add AWC
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Code</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Village</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Mandal</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Sector</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Target</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Status</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {awcs?.map((awc) => (
++                            <tr key={awc.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                <td className="px-4 py-3 font-medium text-white">{awc.name}</td>
++                                <td className="px-4 py-3 text-slate-400 font-mono text-xs">{awc.code}</td>
++                                <td className="px-4 py-3 text-slate-400">{awc.village_name ?? 'ΓÇö'}</td>
++                                <td className="px-4 py-3 text-slate-400">{(awc.mandals as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400">{(awc.sectors as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400">{awc.target_children}</td>
++                                <td className="px-4 py-3">
++                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${awc.is_active
++                                        ? 'bg-green-100 text-green-700'
++                                        : 'bg-red-100 text-red-700'
++                                        }`}>
++                                        {awc.is_active ? 'Active' : 'Inactive'}
++                                    </span>
++                                </td>
++                                <td className="px-4 py-3">
++                                    <Link
++                                        href={`/admin/geography/awcs/${awc.id}`}
++                                        className="text-slate-400 hover:text-white text-xs underline"
++                                    >
++                                        Edit
++                                    </Link>
++                                </td>
++                            </tr>
++                        ))}
++                        {(!awcs || awcs.length === 0) && (
++                            <tr>
++                                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No AWCs found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/districts/[id]/page.tsx b/src/app/admin/geography/districts/[id]/page.tsx
+index 2170524..6ccc22b 100644
+--- a/src/app/admin/geography/districts/[id]/page.tsx
++++ b/src/app/admin/geography/districts/[id]/page.tsx
+@@ -1,3 +1,101 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++import Link from 'next/link'
++
++export default async function EditDistrictPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++    const isNew = id === 'new'
++
++    const { data: states } = await supabase.from('states').select('*').order('name')
++
++    const { data: district } = isNew
++        ? { data: null }
++        : await supabase.from('districts').select('*').eq('id', id).single()
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        const payload = {
++            name: formData.get('name') as string,
++            code: formData.get('code') as string,
++            state_id: formData.get('state_id') as string,
++        }
++
++        if (isNew) {
++            await supabase.from('districts').insert(payload)
++        } else {
++            await supabase.from('districts').update(payload).eq('id', id)
++        }
++
++        redirect('/admin/geography/districts')
++    }
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">
++                {isNew ? 'Add District' : 'Edit District'}
++            </h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
++                    <input
++                        name="name"
++                        defaultValue={district?.name ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Guntur"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
++                    <input
++                        name="code"
++                        defaultValue={district?.code ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. AP-GNT"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">State</label>
++                    <select
++                        name="state_id"
++                        defaultValue={district?.state_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select state</option>
++                        {states?.map((state) => (
++                            <option key={state.id} value={state.id}>{state.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        {isNew ? 'Create District' : 'Save Changes'}
++                    </button>
++
++                    <Link
++                        href="/admin/geography/districts"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </Link>
++                </div>
++            </form>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/districts/page.tsx b/src/app/admin/geography/districts/page.tsx
+index 2170524..1829558 100644
+--- a/src/app/admin/geography/districts/page.tsx
++++ b/src/app/admin/geography/districts/page.tsx
+@@ -1,3 +1,72 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function DistrictsPage() {
++    const supabase = await createClient()
++
++    const { data: districts } = await supabase
++        .from('districts')
++        .select(`
++      *,
++      states(name)
++    `)
++        .order('name')
++
++    return (
++        <div className="space-y-6">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">Districts</h1>
++                    <p className="text-sm text-slate-500 mt-1">{districts?.length ?? 0} districts total</p>
++                </div>
++                <Link
++                    href="/admin/geography/districts/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add District
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Code</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">State</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Created</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {districts?.map((district) => (
++                            <tr key={district.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                <td className="px-4 py-3 font-medium text-white">{district.name}</td>
++                                <td className="px-4 py-3 text-slate-400 font-mono text-xs">{district.code}</td>
++                                <td className="px-4 py-3 text-slate-400">{(district.states as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400 text-xs">
++                                    {new Date(district.created_at).toLocaleDateString()}
++                                </td>
++                                <td className="px-4 py-3">
++                                    <Link
++                                        href={`/admin/geography/districts/${district.id}`}
++                                        className="text-slate-400 hover:text-white text-xs underline"
++                                    >
++                                        Edit
++                                    </Link>
++                                </td>
++                            </tr>
++                        ))}
++                        {(!districts || districts.length === 0) && (
++                            <tr>
++                                <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No districts found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/mandals/[id]/page.tsx b/src/app/admin/geography/mandals/[id]/page.tsx
+index 2170524..af4e6fa 100644
+--- a/src/app/admin/geography/mandals/[id]/page.tsx
++++ b/src/app/admin/geography/mandals/[id]/page.tsx
+@@ -1,3 +1,100 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++
++export default async function EditMandalPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++    const isNew = id === 'new'
++
++    const { data: districts } = await supabase.from('districts').select('*').order('name')
++
++    const { data: mandal } = isNew
++        ? { data: null }
++        : await supabase.from('mandals').select('*').eq('id', id).single()
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        const payload = {
++            name: formData.get('name') as string,
++            code: formData.get('code') as string,
++            district_id: formData.get('district_id') as string,
++        }
++
++        if (isNew) {
++            await supabase.from('mandals').insert(payload)
++        } else {
++            await supabase.from('mandals').update(payload).eq('id', id)
++        }
++
++        redirect('/admin/geography/mandals')
++    }
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">
++                {isNew ? 'Add Mandal' : 'Edit Mandal'}
++            </h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
++                    <input
++                        name="name"
++                        defaultValue={mandal?.name ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Kondapur"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
++                    <input
++                        name="code"
++                        defaultValue={mandal?.code ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. AP-GNT-KDP"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">District</label>
++                    <select
++                        name="district_id"
++                        defaultValue={mandal?.district_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select district</option>
++                        {districts?.map((district) => (
++                            <option key={district.id} value={district.id}>{district.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        {isNew ? 'Create Mandal' : 'Save Changes'}
++                    </button>
++
++                    <a
++                        href="/admin/geography/mandals"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/mandals/page.tsx b/src/app/admin/geography/mandals/page.tsx
+index 2170524..ec10fc8 100644
+--- a/src/app/admin/geography/mandals/page.tsx
++++ b/src/app/admin/geography/mandals/page.tsx
+@@ -1,3 +1,72 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function MandalsPage() {
++    const supabase = await createClient()
++
++    const { data: mandals } = await supabase
++        .from('mandals')
++        .select(`
++      *,
++      districts(name)
++    `)
++        .order('name')
++
++    return (
++        <div className="space-y-6">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">Mandals</h1>
++                    <p className="text-sm text-slate-500 mt-1">{mandals?.length ?? 0} mandals total</p>
++                </div>
++                <Link
++                    href="/admin/geography/mandals/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add Mandal
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Code</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">District</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Created</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {mandals?.map((mandal) => (
++                            <tr key={mandal.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                <td className="px-4 py-3 font-medium text-white">{mandal.name}</td>
++                                <td className="px-4 py-3 text-slate-400 font-mono text-xs">{mandal.code}</td>
++                                <td className="px-4 py-3 text-slate-400">{(mandal.districts as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400 text-xs">
++                                    {new Date(mandal.created_at).toLocaleDateString()}
++                                </td>
++                                <td className="px-4 py-3">
++                                    <Link
++                                        href={`/admin/geography/mandals/${mandal.id}`}
++                                        className="text-slate-400 hover:text-white text-xs underline"
++                                    >
++                                        Edit
++                                    </Link>
++                                </td>
++                            </tr>
++                        ))}
++                        {(!mandals || mandals.length === 0) && (
++                            <tr>
++                                <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No mandals found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/page.tsx b/src/app/admin/geography/page.tsx
+index 2170524..cd01344 100644
+--- a/src/app/admin/geography/page.tsx
++++ b/src/app/admin/geography/page.tsx
+@@ -1,3 +1,49 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function GeographyPage() {
++    const supabase = await createClient()
++
++    const [
++        { count: totalDistricts },
++        { count: totalMandals },
++        { count: totalSectors },
++        { count: totalPanchayats },
++        { count: totalAWCs },
++    ] = await Promise.all([
++        supabase.from('districts').select('*', { count: 'exact', head: true }),
++        supabase.from('mandals').select('*', { count: 'exact', head: true }),
++        supabase.from('sectors').select('*', { count: 'exact', head: true }),
++        supabase.from('panchayats').select('*', { count: 'exact', head: true }),
++        supabase.from('awcs').select('*', { count: 'exact', head: true }),
++    ])
++
++    const sections = [
++        { label: 'Districts', count: totalDistricts ?? 0, href: '/admin/geography/districts', description: 'Manage all districts in Andhra Pradesh' },
++        { label: 'Mandals', count: totalMandals ?? 0, href: '/admin/geography/mandals', description: 'Manage mandals within districts' },
++        { label: 'Sectors', count: totalSectors ?? 0, href: '/admin/geography/sectors', description: 'Manage sectors within mandals' },
++        { label: 'Panchayats', count: totalPanchayats ?? 0, href: '/admin/geography/panchayats', description: 'Manage panchayats within sectors' },
++        { label: 'AWCs', count: totalAWCs ?? 0, href: '/admin/geography/awcs', description: 'Manage Anganwadi Centres' },
++    ]
++
++    return (
++        <div className="space-y-6">
++            <h1 className="text-2xl font-bold text-slate-800">Geography</h1>
++            <p className="text-sm text-slate-500">Manage the full hierarchy ΓÇö State / District / Mandal / Sector / Panchayat / AWC</p>
++
++            <div className="grid grid-cols-3 gap-4">
++                {sections.map((section) => (
++                    <Link
++                        key={section.href}
++                        href={section.href}
++                        className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg p-5 hover:border-slate-600 transition-colors no-underline block"
++                    >
++                        <div className="text-3xl font-bold text-white">{section.count}</div>
++                        <div className="text-base font-semibold text-slate-200 mt-1">{section.label}</div>
++                        <div className="text-xs text-slate-400 mt-1">{section.description}</div>
++                    </Link>
++                ))}
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/panchayats/[id]/page.tsx b/src/app/admin/geography/panchayats/[id]/page.tsx
+index 2170524..c1b70a5 100644
+--- a/src/app/admin/geography/panchayats/[id]/page.tsx
++++ b/src/app/admin/geography/panchayats/[id]/page.tsx
+@@ -1,3 +1,100 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++
++export default async function EditPanchayatPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++    const isNew = id === 'new'
++
++    const { data: sectors } = await supabase.from('sectors').select('*').order('name')
++
++    const { data: panchayat } = isNew
++        ? { data: null }
++        : await supabase.from('panchayats').select('*').eq('id', id).single()
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        const payload = {
++            name: formData.get('name') as string,
++            code: formData.get('code') as string,
++            sector_id: formData.get('sector_id') as string,
++        }
++
++        if (isNew) {
++            await supabase.from('panchayats').insert(payload)
++        } else {
++            await supabase.from('panchayats').update(payload).eq('id', id)
++        }
++
++        redirect('/admin/geography/panchayats')
++    }
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">
++                {isNew ? 'Add Panchayat' : 'Edit Panchayat'}
++            </h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
++                    <input
++                        name="name"
++                        defaultValue={panchayat?.name ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Rampur"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
++                    <input
++                        name="code"
++                        defaultValue={panchayat?.code ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. AP-GNT-KDP-S1-RMP"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Sector</label>
++                    <select
++                        name="sector_id"
++                        defaultValue={panchayat?.sector_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select sector</option>
++                        {sectors?.map((sector) => (
++                            <option key={sector.id} value={sector.id}>{sector.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        {isNew ? 'Create Panchayat' : 'Save Changes'}
++                    </button>
++
++                    <a
++                        href="/admin/geography/panchayats"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/panchayats/page.tsx b/src/app/admin/geography/panchayats/page.tsx
+index 2170524..7c86f19 100644
+--- a/src/app/admin/geography/panchayats/page.tsx
++++ b/src/app/admin/geography/panchayats/page.tsx
+@@ -1,3 +1,72 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function PanchayatsPage() {
++    const supabase = await createClient()
++
++    const { data: panchayats } = await supabase
++        .from('panchayats')
++        .select(`
++      *,
++      sectors(name)
++    `)
++        .order('name')
++
++    return (
++        <div className="space-y-6">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">Panchayats</h1>
++                    <p className="text-sm text-slate-500 mt-1">{panchayats?.length ?? 0} panchayats total</p>
++                </div>
++                <Link
++                    href="/admin/geography/panchayats/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add Panchayat
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Code</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Sector</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Created</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {panchayats?.map((panchayat) => (
++                            <tr key={panchayat.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                <td className="px-4 py-3 font-medium text-white">{panchayat.name}</td>
++                                <td className="px-4 py-3 text-slate-400 font-mono text-xs">{panchayat.code}</td>
++                                <td className="px-4 py-3 text-slate-400">{(panchayat.sectors as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400 text-xs">
++                                    {new Date(panchayat.created_at).toLocaleDateString()}
++                                </td>
++                                <td className="px-4 py-3">
++                                    <Link
++                                        href={`/admin/geography/panchayats/${panchayat.id}`}
++                                        className="text-slate-400 hover:text-white text-xs underline"
++                                    >
++                                        Edit
++                                    </Link>
++                                </td>
++                            </tr>
++                        ))}
++                        {(!panchayats || panchayats.length === 0) && (
++                            <tr>
++                                <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No panchayats found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/sectors/[id]/page.tsx b/src/app/admin/geography/sectors/[id]/page.tsx
+index 2170524..f43d713 100644
+--- a/src/app/admin/geography/sectors/[id]/page.tsx
++++ b/src/app/admin/geography/sectors/[id]/page.tsx
+@@ -1,3 +1,99 @@
+-export default function Page() {
+-    return <div>Page</div>
+-}
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++
++export default async function EditSectorPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++    const isNew = id === 'new'
++
++    const { data: mandals } = await supabase.from('mandals').select('*').order('name')
++
++    const { data: sector } = isNew
++        ? { data: null }
++        : await supabase.from('sectors').select('*').eq('id', id).single()
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        const payload = {
++            name: formData.get('name') as string,
++            code: formData.get('code') as string,
++            mandal_id: formData.get('mandal_id') as string,
++        }
++
++        if (isNew) {
++            await supabase.from('sectors').insert(payload)
++        } else {
++            await supabase.from('sectors').update(payload).eq('id', id)
++        }
++
++        redirect('/admin/geography/sectors')
++    }
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">
++                {isNew ? 'Add Sector' : 'Edit Sector'}
++            </h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
++                    <input
++                        name="name"
++                        defaultValue={sector?.name ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Kondapur Sector 1"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
++                    <input
++                        name="code"
++                        defaultValue={sector?.code ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. AP-GNT-KDP-S1"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Mandal</label>
++                    <select
++                        name="mandal_id"
++                        defaultValue={sector?.mandal_id ?? ''}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select mandal</option>
++                        {mandals?.map((mandal) => (
++                            <option key={mandal.id} value={mandal.id}>{mandal.name}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        {isNew ? 'Create Sector' : 'Save Changes'}
++                    </button>
++                    <a
++                        href="/admin/geography/sectors"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
++}
+\ No newline at end of file
+diff --git a/src/app/admin/geography/sectors/page.tsx b/src/app/admin/geography/sectors/page.tsx
+index 2170524..33279f6 100644
+--- a/src/app/admin/geography/sectors/page.tsx
++++ b/src/app/admin/geography/sectors/page.tsx
+@@ -1,3 +1,72 @@
+-export default function Page() {
+-    return <div>Page</div>
++import { createClient } from '@/lib/supabase/server'
++import Link from 'next/link'
++
++export default async function SectorsPage() {
++    const supabase = await createClient()
++
++    const { data: sectors } = await supabase
++        .from('sectors')
++        .select(`
++            *,
++            mandals(name)
++        `)
++        .order('name')
++
++    return (
++        <div className="space-y-6">
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">Sectors</h1>
++                    <p className="text-sm text-slate-500 mt-1">{sectors?.length ?? 0} sectors total</p>
++                </div>
++                <Link
++                    href="/admin/geography/sectors/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add Sector
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Code</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Mandal</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Created</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {sectors?.map((sector) => (
++                            <tr key={sector.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                <td className="px-4 py-3 font-medium text-white">{sector.name}</td>
++                                <td className="px-4 py-3 text-slate-400 font-mono text-xs">{sector.code}</td>
++                                <td className="px-4 py-3 text-slate-400">{(sector.mandals as any)?.name}</td>
++                                <td className="px-4 py-3 text-slate-400 text-xs">
++                                    {new Date(sector.created_at).toLocaleDateString()}
++                                </td>
++                                <td className="px-4 py-3">
++                                    <Link
++                                        href={`/admin/geography/sectors/${sector.id}`}
++                                        className="text-slate-400 hover:text-white text-xs underline"
++                                    >
++                                        Edit
++                                    </Link>
++                                </td>
++                            </tr>
++                        ))}
++                        {(!sectors || sectors.length === 0) && (
++                            <tr>
++                                <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No sectors found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
+ }
+diff --git a/src/app/admin/layout.tsx b/src/app/admin/layout.tsx
+index ad55a8a..b1ef6a8 100644
+--- a/src/app/admin/layout.tsx
++++ b/src/app/admin/layout.tsx
+@@ -1,11 +1,37 @@
+-export default function AdminLayout({
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++import Sidebar from '@/components/admin/Sidebar'
++import Header from '@/components/admin/Header'
++import { Profile } from '@/lib/types/database'
++
++export default async function AdminLayout({
+     children,
+ }: {
+     children: React.ReactNode
+ }) {
++    const supabase = await createClient()
++
++    const { data: { user } } = await supabase.auth.getUser()
++
++    if (!user) redirect('/login')
++
++    const { data: profile } = await supabase
++        .from('profiles')
++        .select('*')
++        .eq('id', user.id)
++        .single()
++
+     return (
+-        <div>
+-            {children}
++        <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
++            <Sidebar />
++
++            <div className="pl-64 flex flex-col min-h-screen transition-all duration-300">
++                <Header user={user} profile={profile as Profile} />
++
++                <main className="flex-1 p-8 overflow-y-auto">
++                    {children}
++                </main>
++            </div>
+         </div>
+     )
+-}
++}
+\ No newline at end of file
+diff --git a/src/app/admin/users/[id]/page.tsx b/src/app/admin/users/[id]/page.tsx
+index 2170524..2490d5d 100644
+--- a/src/app/admin/users/[id]/page.tsx
++++ b/src/app/admin/users/[id]/page.tsx
+@@ -1,3 +1,170 @@
+-export default function Page() {
+-    return <div>Page</div>
++import { createClient } from '@/lib/supabase/server'
++import { redirect } from 'next/navigation'
++
++export default async function EditUserPage({
++    params,
++}: {
++    params: Promise<{ id: string }>
++}) {
++    const { id } = await params
++    const supabase = await createClient()
++
++    const [
++        { data: user },
++        { data: awcs },
++        { data: mandals },
++        { data: districts },
++    ] = await Promise.all([
++        supabase.from('profiles').select('*').eq('id', id).single(),
++        supabase.from('awcs').select('*').order('name'),
++        supabase.from('mandals').select('*').order('name'),
++        supabase.from('districts').select('*').order('name'),
++    ])
++
++    if (!user) redirect('/admin/users')
++
++    async function save(formData: FormData) {
++        'use server'
++        const supabase = await createClient()
++
++        await supabase
++            .from('profiles')
++            .update({
++                name: formData.get('name') as string,
++                phone: formData.get('phone') as string || null,
++                role: formData.get('role') as string,
++                awc_id: formData.get('awc_id') as string || null,
++                mandal_id: formData.get('mandal_id') as string || null,
++                district_id: formData.get('district_id') as string || null,
++                is_active: formData.get('is_active') === 'true',
++            })
++            .eq('id', id)
++
++        redirect('/admin/users')
++    }
++
++    const roles = [
++        { value: 'aww', label: 'AWW (Anganwadi Worker)' },
++        { value: 'supervisor', label: 'Supervisor (Mandal Team)' },
++        { value: 'cdpo', label: 'CDPO' },
++        { value: 'district_officer', label: 'District Officer' },
++        { value: 'commissioner', label: 'Commissioner' },
++        { value: 'system_admin', label: 'System Admin' },
++    ]
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">Edit User</h1>
++
++            <form action={save} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
++                    <input
++                        name="name"
++                        defaultValue={user.name}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
++                    <input
++                        name="phone"
++                        defaultValue={user.phone ?? ''}
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
++                    <select
++                        name="role"
++                        defaultValue={user.role}
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        {roles.map((r) => (
++                            <option key={r.value} value={r.value}>{r.label}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="border-t border-slate-100 pt-4 space-y-3">
++                    <p className="text-xs text-slate-400">Geographic assignment</p>
++
++                    <div>
++                        <label className="block text-sm font-medium text-slate-700 mb-1">AWC</label>
++                        <select
++                            name="awc_id"
++                            defaultValue={user.awc_id ?? ''}
++                            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        >
++                            <option value="">None</option>
++                            {awcs?.map((a) => (
++                                <option key={a.id} value={a.id}>{a.name}</option>
++                            ))}
++                        </select>
++                    </div>
++
++                    <div>
++                        <label className="block text-sm font-medium text-slate-700 mb-1">Mandal</label>
++                        <select
++                            name="mandal_id"
++                            defaultValue={user.mandal_id ?? ''}
++                            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        >
++                            <option value="">None</option>
++                            {mandals?.map((m) => (
++                                <option key={m.id} value={m.id}>{m.name}</option>
++                            ))}
++                        </select>
++                    </div>
++
++                    <div>
++                        <label className="block text-sm font-medium text-slate-700 mb-1">District</label>
++                        <select
++                            name="district_id"
++                            defaultValue={user.district_id ?? ''}
++                            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        >
++                            <option value="">None</option>
++                            {districts?.map((d) => (
++                                <option key={d.id} value={d.id}>{d.name}</option>
++                            ))}
++                        </select>
++                    </div>
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
++                    <select
++                        name="is_active"
++                        defaultValue={user.is_active ? 'true' : 'false'}
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="true">Active</option>
++                        <option value="false">Inactive</option>
++                    </select>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        Save Changes
++                    </button>
++
++                    <a
++                        href="/admin/users"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
+ }
+diff --git a/src/app/admin/users/new/page.tsx b/src/app/admin/users/new/page.tsx
+index 2170524..8306264 100644
+--- a/src/app/admin/users/new/page.tsx
++++ b/src/app/admin/users/new/page.tsx
+@@ -1,3 +1,191 @@
+-export default function Page() {
+-    return <div>Page</div>
++import { createClient } from '@/lib/supabase/server'
++import { createAdminClient } from '@/lib/supabase/admin'
++import { redirect } from 'next/navigation'
++
++export default async function NewUserPage() {
++    const supabase = await createClient()
++
++    const [
++        { data: awcs },
++        { data: mandals },
++        { data: districts },
++    ] = await Promise.all([
++        supabase.from('awcs').select('*').order('name'),
++        supabase.from('mandals').select('*').order('name'),
++        supabase.from('districts').select('*').order('name'),
++    ])
++
++    async function createUser(formData: FormData) {
++        'use server'
++
++        const role = formData.get('role') as string
++        const email = formData.get('email') as string
++        const password = formData.get('password') as string
++        const name = formData.get('name') as string
++        const phone = formData.get('phone') as string
++        const awc_id = formData.get('awc_id') as string
++        const mandal_id = formData.get('mandal_id') as string
++        const district_id = formData.get('district_id') as string
++
++        const adminClient = createAdminClient()
++
++        const { data, error } = await adminClient.auth.admin.createUser({
++            email,
++            password,
++            email_confirm: true,
++            user_metadata: { name, role },
++        })
++
++        if (error || !data.user) return
++
++        await adminClient
++            .from('profiles')
++            .upsert({
++                id: data.user.id,
++                name,
++                email,
++                phone: phone || null,
++                role,
++                awc_id: awc_id || null,
++                mandal_id: mandal_id || null,
++                district_id: district_id || null,
++            })
++            .eq('id', data.user.id)
++
++        redirect('/admin/users')
++    }
++
++    const roles = [
++        { value: 'aww', label: 'AWW (Anganwadi Worker)' },
++        { value: 'supervisor', label: 'Supervisor (Mandal Team)' },
++        { value: 'cdpo', label: 'CDPO' },
++        { value: 'district_officer', label: 'District Officer' },
++        { value: 'commissioner', label: 'Commissioner' },
++        { value: 'system_admin', label: 'System Admin' },
++    ]
++
++    return (
++        <div className="space-y-6 max-w-lg">
++            <h1 className="text-2xl font-bold text-slate-800">Add User</h1>
++
++            <form action={createUser} className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
++                    <input
++                        name="name"
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. Lakshmi Devi"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
++                    <input
++                        name="email"
++                        type="email"
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. lakshmi@jiveesha.in"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
++                    <input
++                        name="password"
++                        type="password"
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="Min 8 characters"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
++                    <input
++                        name="phone"
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                        placeholder="e.g. 9876543210"
++                    />
++                </div>
++
++                <div>
++                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
++                    <select
++                        name="role"
++                        required
++                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                    >
++                        <option value="">Select role</option>
++                        {roles.map((r) => (
++                            <option key={r.value} value={r.value}>{r.label}</option>
++                        ))}
++                    </select>
++                </div>
++
++                <div className="border-t border-slate-100 pt-4">
++                    <p className="text-xs text-slate-400 mb-3">Assign to geographic entity based on role</p>
++
++                    <div className="space-y-3">
++                        <div>
++                            <label className="block text-sm font-medium text-slate-700 mb-1">AWC (for AWW)</label>
++                            <select
++                                name="awc_id"
++                                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                            >
++                                <option value="">Select AWC</option>
++                                {awcs?.map((a) => (
++                                    <option key={a.id} value={a.id}>{a.name}</option>
++                                ))}
++                            </select>
++                        </div>
++
++                        <div>
++                            <label className="block text-sm font-medium text-slate-700 mb-1">Mandal (for Supervisor / CDPO)</label>
++                            <select
++                                name="mandal_id"
++                                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                            >
++                                <option value="">Select Mandal</option>
++                                {mandals?.map((m) => (
++                                    <option key={m.id} value={m.id}>{m.name}</option>
++                                ))}
++                            </select>
++                        </div>
++
++                        <div>
++                            <label className="block text-sm font-medium text-slate-700 mb-1">District (for District Officer)</label>
++                            <select
++                                name="district_id"
++                                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 text-slate-900 bg-white"
++                            >
++                                <option value="">Select District</option>
++                                {districts?.map((d) => (
++                                    <option key={d.id} value={d.id}>{d.name}</option>
++                                ))}
++                            </select>
++                        </div>
++                    </div>
++                </div>
++
++                <div className="flex gap-3 pt-2">
++                    <button
++                        type="submit"
++                        className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm hover:bg-slate-700 transition-colors"
++                    >
++                        Create User
++                    </button>
++
++                    <a
++                        href="/admin/users"
++                        className="px-4 py-2 rounded-md text-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors no-underline"
++                    >
++                        Cancel
++                    </a>
++                </div>
++            </form>
++        </div>
++    )
+ }
+diff --git a/src/app/admin/users/page.tsx b/src/app/admin/users/page.tsx
+index 2170524..e66f182 100644
+--- a/src/app/admin/users/page.tsx
++++ b/src/app/admin/users/page.tsx
+@@ -1,3 +1,125 @@
+-export default function Page() {
+-    return <div>Page</div>
++import { createAdminClient } from '@/lib/supabase/admin'
++import Link from 'next/link'
++
++export default async function UsersPage() {
++    const supabase = createAdminClient()
++
++    const [{ data: users }, { data: authData }] = await Promise.all([
++        supabase
++            .from('profiles')
++            .select(`
++      *,
++      awcs(name),
++      mandals(name),
++      districts(name)
++    `)
++            .order('created_at', { ascending: false }),
++        supabase.auth.admin.listUsers(),
++    ])
++
++    // Build a map of auth user emails by ID
++    const authEmailMap = new Map<string, string>()
++    if (authData?.users) {
++        for (const au of authData.users) {
++            if (au.email) authEmailMap.set(au.id, au.email)
++        }
++    }
++
++    // Merge auth email into profiles where profiles.email is missing
++    const enrichedUsers = users?.map((u) => ({
++        ...u,
++        email: u.email || authEmailMap.get(u.id) || null,
++    }))
++
++    const roleColors: Record<string, string> = {
++        system_admin: 'bg-purple-100 text-purple-700',
++        aww: 'bg-blue-100 text-blue-700',
++        supervisor: 'bg-yellow-100 text-yellow-700',
++        cdpo: 'bg-green-100 text-green-700',
++        district_officer: 'bg-orange-100 text-orange-700',
++        commissioner: 'bg-red-100 text-red-700',
++    }
++
++
++
++    return (
++        <div className="space-y-6">
++
++
++            <div className="flex items-center justify-between">
++                <div>
++                    <h1 className="text-2xl font-bold text-slate-800">Users</h1>
++                    <p className="text-sm text-slate-500 mt-1">{enrichedUsers?.length ?? 0} users total</p>
++                </div>
++                <Link
++                    href="/admin/users/new"
++                    className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors no-underline"
++                >
++                    Add User
++                </Link>
++            </div>
++
++            <div className="bg-gradient-to-br from-slate-900 to-black border border-slate-800 rounded-lg overflow-hidden">
++                <table className="w-full text-sm">
++                    <thead className="bg-slate-900/50 border-b border-slate-800">
++                        <tr>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Name</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Email</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Phone</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Role</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Assigned To</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Status</th>
++                            <th className="text-left px-4 py-3 text-slate-400 font-medium">Actions</th>
++                        </tr>
++                    </thead>
++                    <tbody>
++                        {enrichedUsers?.map((user) => {
++                            const assignedTo =
++                                (user.awcs as any)?.name ||
++                                (user.mandals as any)?.name ||
++                                (user.districts as any)?.name ||
++                                'ΓÇö'
++
++                            return (
++                                <tr key={user.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
++                                    <td className="px-4 py-3 font-medium text-white">{user.name}</td>
++                                    <td className="px-4 py-3 text-slate-400">{user.email ?? 'ΓÇö'}</td>
++                                    <td className="px-4 py-3 text-slate-400">{user.phone ?? 'ΓÇö'}</td>
++                                    <td className="px-4 py-3">
++                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColors[user.role] ?? 'bg-slate-100 text-slate-600'}`}>
++                                            {user.role}
++                                        </span>
++                                    </td>
++                                    <td className="px-4 py-3 text-slate-400">{assignedTo}</td>
++                                    <td className="px-4 py-3">
++                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${user.is_active
++                                            ? 'bg-green-100 text-green-700'
++                                            : 'bg-red-100 text-red-700'
++                                            }`}>
++                                            {user.is_active ? 'Active' : 'Inactive'}
++                                        </span>
++                                    </td>
++                                    <td className="px-4 py-3">
++                                        <Link
++                                            href={`/admin/users/${user.id}`}
++                                            className="text-slate-400 hover:text-white text-xs underline"
++                                        >
++                                            Edit
++                                        </Link>
++                                    </td>
++                                </tr>
++                            )
++                        })}
++                        {(!enrichedUsers || enrichedUsers.length === 0) && (
++                            <tr>
++                                <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
++                                    No users found.
++                                </td>
++                            </tr>
++                        )}
++                    </tbody>
++                </table>
++            </div>
++        </div>
++    )
+ }
+diff --git a/src/app/api/auth/route.ts b/src/app/api/auth/route.ts
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/app/api/content/route.ts b/src/app/api/content/route.ts
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/app/api/geography/route.ts b/src/app/api/geography/route.ts
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/app/api/users/route.ts b/src/app/api/users/route.ts
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/src/app/globals.css b/src/app/globals.css
+index a2dc41e..119ae16 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -12,12 +12,7 @@
+   --font-mono: var(--font-geist-mono);
+ }
+ 
+-@media (prefers-color-scheme: dark) {
+-  :root {
+-    --background: #0a0a0a;
+-    --foreground: #ededed;
+-  }
+-}
++
+ 
+ body {
+   background: var(--background);
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index 295f8fd..1413e02 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -1,65 +1,5 @@
+-import Image from "next/image";
++import { redirect } from 'next/navigation';
+ 
+ export default function Home() {
+-  return (
+-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+-        <Image
+-          className="dark:invert"
+-          src="/next.svg"
+-          alt="Next.js logo"
+-          width={100}
+-          height={20}
+-          priority
+-        />
+-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
+-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
+-            To get started, edit the page.tsx file.
+-          </h1>
+-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+-            Looking for a starting point or more instructions? Head over to{" "}
+-            <a
+-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-              className="font-medium text-zinc-950 dark:text-zinc-50"
+-            >
+-              Templates
+-            </a>{" "}
+-            or the{" "}
+-            <a
+-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-              className="font-medium text-zinc-950 dark:text-zinc-50"
+-            >
+-              Learning
+-            </a>{" "}
+-            center.
+-          </p>
+-        </div>
+-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+-          <a
+-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
+-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-            target="_blank"
+-            rel="noopener noreferrer"
+-          >
+-            <Image
+-              className="dark:invert"
+-              src="/vercel.svg"
+-              alt="Vercel logomark"
+-              width={16}
+-              height={16}
+-            />
+-            Deploy Now
+-          </a>
+-          <a
+-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
+-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-            target="_blank"
+-            rel="noopener noreferrer"
+-          >
+-            Documentation
+-          </a>
+-        </div>
+-      </main>
+-    </div>
+-  );
++  redirect('/login');
+ }
+diff --git a/src/components/admin/Header.tsx b/src/components/admin/Header.tsx
+index 51a19f2..8874007 100644
+--- a/src/components/admin/Header.tsx
++++ b/src/components/admin/Header.tsx
+@@ -1,5 +1,34 @@
+-export default function Header() {
++import { Profile } from '@/lib/types/database'
++import { User } from '@supabase/supabase-js'
++
++interface HeaderProps {
++    user: User
++    profile: Profile | null
++}
++
++export default function Header({ user, profile }: HeaderProps) {
+     return (
+-        <div>Header</div>
++        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10 w-full">
++            <h1 className="text-xl font-semibold text-slate-800">Dashboard</h1>
++
++            <div className="flex items-center gap-4">
++                <button className="relative p-2 text-slate-400 hover:text-slate-800 transition-colors rounded-full hover:bg-slate-100">
++                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
++                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
++                    </svg>
++                </button>
++
++                <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
++                    <div className="hidden md:block text-right">
++                        <p className="text-sm font-medium text-slate-800">{profile?.name || 'User'}</p>
++                        <p className="text-xs text-slate-500 capitalize">{profile?.role?.replace('_', ' ') || 'Admin'}</p>
++                    </div>
++                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-sm font-medium text-white border border-slate-700">
++                        {profile?.name?.[0] || user.email?.[0] || 'U'}
++                    </div>
++                </div>
++            </div>
++        </header>
+     )
+ }
+diff --git a/src/components/admin/Sidebar.tsx b/src/components/admin/Sidebar.tsx
+index 5c4f912..f04fe94 100644
+--- a/src/components/admin/Sidebar.tsx
++++ b/src/components/admin/Sidebar.tsx
+@@ -1,5 +1,45 @@
++import Link from 'next/link'
++
+ export default function Sidebar() {
++    // This hook would be used if this were a client component to highlight active links
++    // For now we'll keep it simple or make it 'use client' if needed
++
++    const menuItems = [
++        { label: 'Dashboard', href: '/admin/dashboard', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
++        { label: 'User Management', href: '/admin/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
++        { label: 'Geographic Hierarchy', href: '/admin/geography', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
++        { label: 'AWC Management', href: '/admin/geography/awcs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
++        { label: 'System Health', href: '/admin/audit-log', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
++        { label: 'Alerts', href: '/admin/alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
++    ]
++
+     return (
+-        <div>Sidebar</div>
++        <aside className="w-64 bg-gradient-to-b from-slate-900 to-black text-white flex flex-col h-screen fixed left-0 top-0 border-r border-slate-800">
++            <div className="p-6 flex items-center gap-3">
++                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-600 rounded-lg flex items-center justify-center font-bold text-white">J</div>
++                <span className="text-lg font-bold tracking-tight">JIVEESHA</span>
++                <span className="text-[10px] bg-red-900/50 text-red-200 px-1.5 py-0.5 rounded border border-red-800 ml-auto">ADMIN</span>
++            </div>
++
++            <div className="px-4 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
++                Main Menu
++            </div>
++
++            <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
++                {menuItems.map((item) => (
++                    <Link
++                        key={item.href}
++                        href={item.href}
++                        className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-zinc-400 rounded-lg hover:bg-zinc-900 hover:text-white transition-colors group"
++                    >
++                        <svg className="w-5 h-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
++                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
++                        </svg>
++                        {item.label}
++                    </Link>
++                ))}
++            </nav>
++
++        </aside>
+     )
+ }
+diff --git a/src/lib/types/database.ts b/src/lib/types/database.ts
+index 556b7a4..1bbe4e1 100644
+--- a/src/lib/types/database.ts
++++ b/src/lib/types/database.ts
+@@ -1,2 +1,161 @@
+-// Database types will be defined here
+-export { }
++export type UserRole =
++    | 'aww'
++    | 'supervisor'
++    | 'cdpo'
++    | 'district_officer'
++    | 'commissioner'
++    | 'system_admin'
++
++export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
++export type FlagPriority = 'low' | 'medium' | 'high' | 'urgent'
++export type FlagStatus = 'raised' | 'acknowledged' | 'in_progress' | 'resolved' | 'escalated'
++
++export interface Profile {
++    id: string
++    name: string
++    phone: string | null
++    email: string | null
++    role: UserRole
++    awc_id: string | null
++    mandal_id: string | null
++    district_id: string | null
++    state_id: string | null
++    is_active: boolean
++    avatar_url: string | null
++    created_at: string
++    updated_at: string
++}
++
++export interface State {
++    id: string
++    name: string
++    code: string
++    created_at: string
++}
++
++export interface District {
++    id: string
++    state_id: string
++    name: string
++    code: string
++    created_at: string
++}
++
++export interface Mandal {
++    id: string
++    district_id: string
++    name: string
++    code: string
++    created_at: string
++}
++
++export interface Sector {
++    id: string
++    mandal_id: string
++    name: string
++    code: string
++    created_at: string
++}
++
++export interface Panchayat {
++    id: string
++    sector_id: string
++    name: string
++    code: string
++    created_at: string
++}
++
++export interface AWC {
++    id: string
++    panchayat_id: string | null
++    sector_id: string
++    mandal_id: string
++    name: string
++    code: string
++    latitude: number | null
++    longitude: number | null
++    village_name: string | null
++    target_children: number
++    is_active: boolean
++    created_at: string
++}
++
++export interface Child {
++    id: string
++    name: string
++    dob: string
++    gender: 'male' | 'female' | 'other'
++    awc_id: string
++    current_risk_level: RiskLevel | null
++    is_active: boolean
++    registered_at: string
++}
++
++export interface Question {
++    id: string
++    question_number: number
++    text_en: string
++    text_te: string | null
++    domain: 'GM' | 'FM' | 'LC' | 'COG' | 'SE'
++    age_min_months: number
++    age_max_months: number
++    weight: number
++    is_critical: boolean
++    illustration_url: string | null
++    created_at: string
++}
++
++export interface Activity {
++    id: string
++    title_en: string
++    title_te: string | null
++    description_en: string
++    description_te: string | null
++    domain: 'GM' | 'FM' | 'LC' | 'COG' | 'SE'
++    age_min_months: number
++    age_max_months: number
++    difficulty: 'easy' | 'moderate' | 'advanced'
++    materials_needed: string | null
++    duration_minutes: number
++    tags: string[]
++    is_active: boolean
++    created_at: string
++}
++
++export interface Flag {
++    id: string
++    child_id: string
++    raised_by: string
++    priority: FlagPriority
++    status: FlagStatus
++    title: string
++    description: string
++    created_at: string
++}
++
++export interface AuditLog {
++    id: number
++    timestamp: string
++    user_id: string | null
++    user_role: UserRole | null
++    action: string
++    resource_type: string | null
++    resource_id: string | null
++    details: Record<string, unknown> | null
++    ip_address: string | null
++    purpose: string
++}
++
++export interface Alert {
++    id: string
++    type: string
++    severity: 'info' | 'medium' | 'high' | 'critical'
++    child_id: string | null
++    awc_id: string | null
++    target_roles: UserRole[]
++    target_user_id: string | null
++    message: string
++    is_read: boolean
++    acknowledged_at: string | null
++    created_at: string
++}
+\ No newline at end of file

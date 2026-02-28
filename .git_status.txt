@@ -1,0 +1,40 @@
+﻿On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   src/app/admin/dashboard/page.tsx
+	modified:   src/app/admin/geography/awcs/[id]/page.tsx
+	modified:   src/app/admin/geography/awcs/page.tsx
+	modified:   src/app/admin/geography/districts/[id]/page.tsx
+	modified:   src/app/admin/geography/districts/page.tsx
+	modified:   src/app/admin/geography/mandals/[id]/page.tsx
+	modified:   src/app/admin/geography/mandals/page.tsx
+	modified:   src/app/admin/geography/page.tsx
+	modified:   src/app/admin/geography/panchayats/[id]/page.tsx
+	modified:   src/app/admin/geography/panchayats/page.tsx
+	modified:   src/app/admin/geography/sectors/[id]/page.tsx
+	modified:   src/app/admin/geography/sectors/page.tsx
+	modified:   src/app/admin/layout.tsx
+	modified:   src/app/admin/users/[id]/page.tsx
+	modified:   src/app/admin/users/new/page.tsx
+	modified:   src/app/admin/users/page.tsx
+	deleted:    src/app/api/auth/route.ts
+	deleted:    src/app/api/content/route.ts
+	deleted:    src/app/api/geography/route.ts
+	deleted:    src/app/api/users/route.ts
+	modified:   src/app/globals.css
+	modified:   src/app/page.tsx
+	modified:   src/components/admin/Header.tsx
+	modified:   src/components/admin/Sidebar.tsx
+	modified:   src/lib/types/database.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.git_diff.txt
+	.git_diff_staged.txt
+	.git_status.txt
+	src/lib/actions/
+
+no changes added to commit (use "git add" and/or "git commit -a")

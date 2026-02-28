@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
+
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -39,14 +39,9 @@ export default function LoginPage() {
         <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black p-4">
             <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800">
                 <div className="flex flex-col items-center">
-                    <Image
-                        className="dark:invert mb-8"
-                        src="/next.svg"
-                        alt="Next.js logo"
-                        width={100}
-                        height={20}
-                        priority
-                    />
+                    <h1 className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-zinc-50 mb-8">
+                        Jiveesha
+                    </h1>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
                         Sign in to Admin
                     </h2>

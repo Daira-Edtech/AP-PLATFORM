@@ -21,14 +21,19 @@ export default async function AdminLayout({
         .eq('id', user.id)
         .single()
 
+    // Check for admin permissions
+    if (!profile || (profile.role !== 'system_admin' && profile.role !== 'super_admin')) {
+        redirect('/login?error=Unauthorized')
+    }
+
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        <div className="min-h-screen bg-white font-sans text-slate-900">
             <Sidebar />
 
-            <div className="pl-64 flex flex-col min-h-screen transition-all duration-300">
+            <div className="pl-64 flex flex-col min-h-screen transition-all duration-300 bg-white">
                 <Header user={user} profile={profile as Profile} />
 
-                <main className="flex-1 p-8 overflow-y-auto">
+                <main className="flex-1 p-8 overflow-y-auto bg-white">
                     {children}
                 </main>
             </div>

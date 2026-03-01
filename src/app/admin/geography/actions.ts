@@ -1,7 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/client' // Corrected from '@/lib/supabase/admin' which might be missing in some contexts, but actually using server actions we should use the admin client for bypass RLS if needed. Wait, let's use the standard one first.
 import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
+
 import { revalidatePath } from 'next/cache'
 
 export async function getGeographicTree() {

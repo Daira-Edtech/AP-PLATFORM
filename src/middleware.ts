@@ -1,11 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ROLE_DASHBOARD_MAP } from '@/lib/roles'
 
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
-        request: {
-            headers: request.headers,
-        },
+        request: { headers: request.headers },
     })
 
     const supabase = createServerClient(
@@ -21,9 +20,7 @@ export async function middleware(request: NextRequest) {
                         request.cookies.set(name, value)
                     )
                     supabaseResponse = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
+                        request: { headers: request.headers },
                     })
                     cookiesToSet.forEach(({ name, value, options }) =>
                         supabaseResponse.cookies.set(name, value, options)
@@ -33,16 +30,19 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    // IMPORTANT: Refreshing the session should be done before any getUser check
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Handle API authorization
-    if (!user && request.nextUrl.pathname.startsWith('/api/admin')) {
+    const protectedPrefixes = ['/admin', '/commissioner', '/dpo', '/cdpo']
+    const isProtectedRoute = protectedPrefixes.some(p => request.nextUrl.pathname.startsWith(p))
+    const isApiRoute = request.nextUrl.pathname.startsWith('/api/admin')
+
+    // Block unauthenticated API access
+    if (!user && isApiRoute) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Redirect to login if accessing admin pages without a session
-    if (!user && request.nextUrl.pathname.startsWith('/admin')) {
+    // Redirect unauthenticated users on protected routes to login
+    if (!user && isProtectedRoute) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         const redirectResponse = NextResponse.redirect(url)
@@ -52,33 +52,34 @@ export async function middleware(request: NextRequest) {
         return redirectResponse
     }
 
-    // Redirect to dashboard if logged in and trying to access login page or root
-    // BUT avoid the loop: if they are on /login with an error (like Unauthorized), 
-    // it means they were just kicked out of /admin, so don't send them back.
+    // Redirect authenticated users away from login/root to their dashboard
     if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/')) {
         const hasError = request.nextUrl.searchParams.has('error')
-
         if (!hasError) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/admin/dashboard'
-            const redirectResponse = NextResponse.redirect(url)
-            supabaseResponse.cookies.getAll().forEach((c) => {
-                redirectResponse.cookies.set(c.name, c.value, c)
-            })
-            return redirectResponse
-        }
-    }
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single()
 
-    // If not logged in and on root, go to login
-    if (!user && request.nextUrl.pathname === '/') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        return NextResponse.redirect(url)
+            if (profile) {
+                const dashboard = ROLE_DASHBOARD_MAP[profile.role]
+                if (dashboard) {
+                    const url = request.nextUrl.clone()
+                    url.pathname = dashboard
+                    const redirectResponse = NextResponse.redirect(url)
+                    supabaseResponse.cookies.getAll().forEach((c) => {
+                        redirectResponse.cookies.set(c.name, c.value, c)
+                    })
+                    return redirectResponse
+                }
+            }
+        }
     }
 
     return supabaseResponse
 }
 
 export const config = {
-    matcher: ['/', '/admin/:path*', '/login', '/api/:path*'],
+    matcher: ['/', '/admin/:path*', '/commissioner/:path*', '/dpo/:path*', '/cdpo/:path*', '/login', '/api/:path*'],
 }

@@ -1,0 +1,8 @@
+
+{
+  "name": "Jiveesha State Commissioner Portal",
+  "description": "A Tier-5 executive dashboard for State Commissioners, providing high-level data-dense analytics, geographic risk mapping, and policy insights for early childhood development.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

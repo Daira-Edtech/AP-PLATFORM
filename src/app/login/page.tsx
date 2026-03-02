@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getRoleDashboard } from '@/lib/roles'
 
 export default function LoginPage() {
     const searchParams = useSearchParams()
@@ -19,21 +20,38 @@ export default function LoginPage() {
         if (err) setError(err)
     }, [searchParams])
 
-
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
         setError(null)
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             })
 
-            if (error) throw error
+            if (authError) throw authError
 
-            router.push('/admin/dashboard')
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', authData.user.id)
+                .single()
+
+            if (profileError || !profile) {
+                await supabase.auth.signOut()
+                throw new Error('Profile not found. Contact your administrator.')
+            }
+
+            const dashboard = getRoleDashboard(profile.role)
+
+            if (dashboard.startsWith('/login')) {
+                await supabase.auth.signOut()
+                throw new Error('No portal access for this account role.')
+            }
+
+            router.push(dashboard)
             router.refresh()
         } catch (err: any) {
             setError(err.message || 'Failed to sign in')
@@ -54,29 +72,32 @@ export default function LoginPage() {
 
                     <div className="mt-24 max-w-md">
                         <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mb-6">
-                            System Administration
+                            Unified Portal Access
                         </p>
                         <h1 className="text-5xl font-bold leading-[1.1] tracking-tight mb-12">
-                            High-level security orchestration and platform hierarchy management.
+                            Secure access for every level of the ICDS hierarchy.
                         </h1>
 
-                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 flex gap-4 backdrop-blur-sm">
-                            <div className="mt-1">
-                                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-zinc-300">
-                                    Restricted access protocol enabled. Every action is logged and audited in real-time.
-                                </p>
-                            </div>
+                        <div className="space-y-3">
+                            {[
+                                { label: 'State Commissioner', desc: 'State-wide oversight & analytics' },
+                                { label: 'District Programme Officer', desc: 'District-level monitoring' },
+                                { label: 'CDPO', desc: 'Project-level management' },
+                            ].map((item) => (
+                                <div key={item.label} className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-medium text-zinc-200">{item.label}</p>
+                                        <p className="text-[10px] text-zinc-500">{item.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
 
                 <div className="text-[10px] text-zinc-600 font-medium tracking-wider">
-                    © 2024 JIVEESHA PLATFORMS. ALL RIGHTS RESERVED.
+                    © 2025 JIVEESHA PLATFORMS. ALL RIGHTS RESERVED.
                 </div>
             </div>
 
@@ -84,29 +105,29 @@ export default function LoginPage() {
             <div className="w-full lg:w-1/2 bg-white flex flex-col items-center justify-center p-8 lg:p-24">
                 <div className="w-full max-w-[360px] space-y-8">
                     <div className="text-center lg:text-left">
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Sign In</h2>
-                        <p className="text-xs text-red-500 font-bold mt-1 tracking-wider uppercase">Restricted access portal</p>
+                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign In</h2>
+                        <p className="text-xs text-zinc-500 font-medium mt-1">Access your role-specific dashboard</p>
                     </div>
 
                     <form className="space-y-6" onSubmit={handleLogin}>
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-[10px] font-bold text-zinc-400 tracking-widest uppercase mb-1.5 ml-0.5">
-                                    Work Email
+                                    Email
                                 </label>
                                 <input
                                     type="email"
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="admin@jiveesha.in"
+                                    placeholder="you@jiveesha.in"
                                     className="w-full border border-zinc-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black placeholder-zinc-300 transition-all"
                                 />
                             </div>
 
                             <div className="relative">
                                 <label className="block text-[10px] font-bold text-zinc-400 tracking-widest uppercase mb-1.5 ml-0.5">
-                                    Admin Password
+                                    Password
                                 </label>
                                 <input
                                     type={showPassword ? 'text' : 'password'}

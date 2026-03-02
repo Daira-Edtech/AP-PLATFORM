@@ -1,13 +1,20 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { getRoleDashboard } from '@/lib/roles'
 
 export default async function Home() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (user) {
-    redirect('/admin/dashboard');
-  }
+  if (!user) redirect('/login')
 
-  redirect('/login');
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) redirect('/login?error=Profile not found')
+
+  redirect(getRoleDashboard(profile.role))
 }

@@ -3,9 +3,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import * as actions from '@/app/admin/users/actions';
+import * as geoActions from '@/app/admin/geography/actions';
 
-// ... icons ...
 const Icons = {
+    RefreshCcw: ({ size = 14 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
     ArrowLeft: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
     Edit2: ({ size = 14, className = "" }) => <svg width={size} height={size} className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>,
     Key: ({ size = 18 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
@@ -18,7 +19,6 @@ const Icons = {
     ChevronDown: ({ size = 14 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
     Globe: ({ size = 18 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9-3-9m-9 9a9 9 0 019-9" /></svg>,
     LogOut: ({ size = 14 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
-    RefreshCcw: ({ size = 14 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
     ShieldCheck: ({ size = 18 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
     CheckCircle2: ({ size = 18 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
     AlertCircle: ({ size = 18 }) => <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -52,13 +52,23 @@ interface UserDetailProps {
 type Tab = 'PROFILE' | 'ASSIGNMENT' | 'ACTIVITY' | 'SECURITY';
 
 const ROLE_BADGE_STYLE: Record<string, string> = {
-    aww: 'bg-gray-100 text-gray-700',
+    aww: 'bg-blue-50 text-blue-700 border-blue-200',
     supervisor: 'bg-amber-50 text-amber-700 border-amber-200',
-    cdpo: 'bg-blue-50 text-blue-700 border-blue-200',
+    cdpo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     district_officer: 'bg-green-50 text-green-700 border-green-200',
-    commissioner: 'bg-black text-white',
+    commissioner: 'bg-black text-white border-black',
     system_admin: 'bg-red-50 text-red-700 border-red-200',
     super_admin: 'bg-purple-50 text-purple-700 border-purple-200',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+    aww: 'AWW (Anganwadi Worker)',
+    supervisor: 'Supervisor (Mandal Team)',
+    cdpo: 'CDPO',
+    district_officer: 'District Officer',
+    commissioner: 'Commissioner',
+    system_admin: 'System Admin',
+    super_admin: 'Super Admin',
 };
 
 const ACTIVITY_DATA = [
@@ -87,14 +97,20 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
     });
 
     const [locations, setLocations] = useState({
+        states: [] as any[],
         districts: [] as any[],
         mandals: [] as any[],
+        sectors: [] as any[],
+        panchayats: [] as any[],
         awcs: [] as any[],
     });
 
     const [tempAssignment, setTempAssignment] = useState({
+        state_id: user.state_id || '',
         district_id: user.district_id || '',
         mandal_id: user.mandal_id || '',
+        sector_id: user.sector_id || '',
+        panchayat_id: user.panchayat_id || '',
         awc_id: user.awc_id || '',
     });
 
@@ -103,30 +119,65 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
     const statusColor = formData.is_active ? 'bg-emerald-500' : 'bg-red-500';
 
     useEffect(() => {
-        async function fetchLocations() {
-            const { data: d } = await supabase.from('districts').select('*');
-            setLocations(prev => ({ ...prev, districts: d || [] }));
+        async function fetchInitialData() {
+            const tree = await geoActions.getGeographicTree();
+            setLocations(prev => ({
+                ...prev,
+                states: tree.states || [],
+                districts: tree.districts || [],
+                mandals: tree.mandals || [],
+                sectors: tree.sectors || [],
+                panchayats: tree.panchayats || [],
+                awcs: tree.awcs || []
+            }));
         }
-        fetchLocations();
-    }, [supabase]);
+        fetchInitialData();
+    }, []);
+
+    useEffect(() => {
+        async function fetchDistricts() {
+            if (!tempAssignment.state_id) return;
+            const data = await geoActions.getEntitiesByParent('STATE', tempAssignment.state_id);
+            setLocations(prev => ({ ...prev, districts: data || [] }));
+        }
+        fetchDistricts();
+    }, [tempAssignment.state_id]);
 
     useEffect(() => {
         async function fetchMandals() {
             if (!tempAssignment.district_id) return;
-            const { data: m } = await supabase.from('mandals').select('*').eq('district_id', tempAssignment.district_id);
-            setLocations(prev => ({ ...prev, mandals: m || [] }));
+            const data = await geoActions.getEntitiesByParent('DISTRICT', tempAssignment.district_id);
+            setLocations(prev => ({ ...prev, mandals: data || [] }));
         }
         fetchMandals();
-    }, [tempAssignment.district_id, supabase]);
+    }, [tempAssignment.district_id]);
+
+    useEffect(() => {
+        async function fetchSectors() {
+            if (!tempAssignment.mandal_id) return;
+            const data = await geoActions.getEntitiesByParent('MANDAL', tempAssignment.mandal_id);
+            setLocations(prev => ({ ...prev, sectors: data || [] }));
+        }
+        fetchSectors();
+    }, [tempAssignment.mandal_id]);
+
+    useEffect(() => {
+        async function fetchPanchayats() {
+            if (!tempAssignment.sector_id) return;
+            const data = await geoActions.getEntitiesByParent('SECTOR', tempAssignment.sector_id);
+            setLocations(prev => ({ ...prev, panchayats: data || [] }));
+        }
+        fetchPanchayats();
+    }, [tempAssignment.sector_id]);
 
     useEffect(() => {
         async function fetchAWCs() {
-            if (!tempAssignment.mandal_id) return;
-            const { data: a } = await supabase.from('awcs').select('*').eq('mandal_id', tempAssignment.mandal_id);
-            setLocations(prev => ({ ...prev, awcs: a || [] }));
+            if (!tempAssignment.panchayat_id) return;
+            const data = await geoActions.getEntitiesByParent('PANCHAYAT', tempAssignment.panchayat_id);
+            setLocations(prev => ({ ...prev, awcs: data || [] }));
         }
         fetchAWCs();
-    }, [tempAssignment.mandal_id, supabase]);
+    }, [tempAssignment.panchayat_id]);
 
     const handleSaveProfile = async () => {
         setActionLoading(true);
@@ -163,8 +214,11 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
         setActionLoading(true);
         try {
             await actions.reassignUser(user.id, {
+                state_id: tempAssignment.state_id || null,
                 district_id: tempAssignment.district_id || null,
                 mandal_id: tempAssignment.mandal_id || null,
+                sector_id: tempAssignment.sector_id || null,
+                panchayat_id: tempAssignment.panchayat_id || null,
                 awc_id: tempAssignment.awc_id || null
             });
             alert('User reassigned successfully');
@@ -333,10 +387,10 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                                             value={formData.role}
                                             onChange={(e) => handleRoleChange(e.target.value)}
                                             disabled={actionLoading}
-                                            className={`w-full h-10 px-4 pr-10 appearance-none bg-white border border-gray-200 rounded-full text-[13px] font-bold uppercase tracking-tight text-center transition-all outline-none focus:border-black ${ROLE_BADGE_STYLE[formData.role] || 'bg-gray-100 text-gray-700'}`}
+                                            className={`w-full h-10 px-6 pr-10 appearance-none border rounded-full text-[13px] font-bold uppercase tracking-widest text-center transition-all outline-none focus:ring-2 focus:ring-black/5 hover:scale-[1.02] cursor-pointer ${ROLE_BADGE_STYLE[formData.role] || 'bg-gray-100 text-gray-700 border-gray-200'}`}
                                         >
-                                            {Object.keys(ROLE_BADGE_STYLE).map(role => (
-                                                <option key={role} value={role}>{role.replace('_', ' ')}</option>
+                                            {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                                <option key={value} value={value} className="bg-white text-black py-2">{label}</option>
                                             ))}
                                         </select>
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
@@ -368,22 +422,34 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                     </div>
                 );
             case 'ASSIGNMENT':
+                const getName = (id: string | null, type: keyof typeof locations, userName: string | undefined): string => {
+                    if (userName) return userName;
+                    if (!id) return type === 'awcs' ? 'Unassigned' : 'Any';
+                    const list = locations[type] as any[];
+                    const item = list.find(i => i.id === id);
+                    return item ? item.name : 'Loading...';
+                };
+
+                const currentAssignment = [
+                    { label: getName(user.state_id, 'states', user.states?.name), type: 'STATE' },
+                    { label: getName(user.district_id, 'districts', user.districts?.name), type: 'DISTRICT' },
+                    { label: getName(user.mandal_id, 'mandals', user.mandals?.name), type: 'MANDAL' },
+                    { label: getName(user.sector_id, 'sectors', user.sectors?.name), type: 'SECTOR' },
+                    { label: getName(user.panchayat_id, 'panchayats', user.panchayats?.name), type: 'PANCHAYAT' },
+                    { label: getName(user.awc_id, 'awcs', user.awcs?.name), type: 'AWC' }
+                ];
+
                 return (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
                             <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-6">Current Assignment</h3>
                             <div className="flex flex-wrap items-center gap-3">
-                                {[
-                                    { label: 'AP', type: 'STATE' },
-                                    { label: user.districts?.name || 'Any', type: 'DISTRICT' },
-                                    { label: user.mandals?.name || 'Project', type: 'MANDAL' },
-                                    { label: user.awcs?.name || 'Unassigned', type: 'AWC' }
-                                ].map((item, idx, arr) => (
+                                {currentAssignment.map((item, idx, arr) => (
                                     <React.Fragment key={idx}>
-                                        <button className="flex items-center space-x-2 p-2 bg-gray-50 border border-transparent hover:border-black rounded-lg transition-all">
+                                        <div className="flex items-center space-x-2 p-2 bg-gray-50 border border-gray-100 rounded-lg">
                                             <span className="text-[13px] font-semibold text-gray-800">{item.label}</span>
-                                            <span className="text-[9px] font-bold text-gray-400 uppercase bg-white px-1 py-0.5 rounded">{item.type}</span>
-                                        </button>
+                                            <span className="text-[9px] font-bold text-gray-400 uppercase bg-white px-1 py-0.5 rounded border border-gray-100">{item.type}</span>
+                                        </div>
                                         {idx < arr.length - 1 && <Icons.ChevronRight className="text-gray-300" />}
                                     </React.Fragment>
                                 ))}
@@ -394,47 +460,85 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                             <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
                                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Reassign User</h3>
                                 <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Target District</label>
-                                        <select
-                                            value={tempAssignment.district_id}
-                                            onChange={(e) => setTempAssignment({ ...tempAssignment, district_id: e.target.value, mandal_id: '', awc_id: '' })}
-                                            className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all"
-                                        >
-                                            <option value="">Select District</option>
-                                            {locations.districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Target Mandal</label>
-                                        <select
-                                            value={tempAssignment.mandal_id}
-                                            onChange={(e) => setTempAssignment({ ...tempAssignment, mandal_id: e.target.value, awc_id: '' })}
-                                            disabled={!tempAssignment.district_id}
-                                            className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
-                                        >
-                                            <option value="">Select Mandal</option>
-                                            {locations.mandals.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Target AWC</label>
-                                        <select
-                                            value={tempAssignment.awc_id}
-                                            onChange={(e) => setTempAssignment({ ...tempAssignment, awc_id: e.target.value })}
-                                            disabled={!tempAssignment.mandal_id}
-                                            className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
-                                        >
-                                            <option value="">Select AWC</option>
-                                            {locations.awcs.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                        </select>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">State</label>
+                                            <select
+                                                value={tempAssignment.state_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, state_id: e.target.value, district_id: '', mandal_id: '', sector_id: '', panchayat_id: '', awc_id: '' })}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all"
+                                            >
+                                                <option value="">Select State</option>
+                                                {locations.states.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">District</label>
+                                            <select
+                                                value={tempAssignment.district_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, district_id: e.target.value, mandal_id: '', sector_id: '', panchayat_id: '', awc_id: '' })}
+                                                disabled={!tempAssignment.state_id}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
+                                            >
+                                                <option value="">Select District</option>
+                                                {locations.districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Mandal</label>
+                                            <select
+                                                value={tempAssignment.mandal_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, mandal_id: e.target.value, sector_id: '', panchayat_id: '', awc_id: '' })}
+                                                disabled={!tempAssignment.district_id}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
+                                            >
+                                                <option value="">Select Mandal</option>
+                                                {locations.mandals.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Sector</label>
+                                            <select
+                                                value={tempAssignment.sector_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, sector_id: e.target.value, panchayat_id: '', awc_id: '' })}
+                                                disabled={!tempAssignment.mandal_id}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
+                                            >
+                                                <option value="">Select Sector</option>
+                                                {locations.sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Panchayat</label>
+                                            <select
+                                                value={tempAssignment.panchayat_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, panchayat_id: e.target.value, awc_id: '' })}
+                                                disabled={!tempAssignment.sector_id}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
+                                            >
+                                                <option value="">Select Panchayat</option>
+                                                {locations.panchayats.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">AWC</label>
+                                            <select
+                                                value={tempAssignment.awc_id}
+                                                onChange={(e) => setTempAssignment({ ...tempAssignment, awc_id: e.target.value })}
+                                                disabled={!tempAssignment.panchayat_id}
+                                                className="w-full h-11 px-4 bg-gray-50 border border-transparent rounded-lg text-[13px] font-medium text-gray-700 outline-none focus:border-black transition-all disabled:opacity-50"
+                                            >
+                                                <option value="">Select AWC</option>
+                                                {locations.awcs.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
                                     <button
                                         onClick={handleReassign}
-                                        disabled={actionLoading || !tempAssignment.district_id}
+                                        disabled={actionLoading || !tempAssignment.state_id}
                                         className="w-full py-3 bg-black text-white rounded-lg text-[13px] font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-400"
                                     >
-                                        {actionLoading ? 'Updating...' : 'Reassign User'}
+                                        {actionLoading ? 'Updating...' : 'Apply Reassignment'}
                                     </button>
                                 </div>
                             </div>

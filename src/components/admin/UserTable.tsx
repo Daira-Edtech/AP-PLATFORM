@@ -100,7 +100,7 @@ export function UserTable({ users: initialUsers }: UserTableProps) {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 tracking-tight">User Management</h1>
                     <p className="text-sm text-slate-500 mt-1 font-medium">
-                        {initialUsers.length.toLocaleString()} users across 6 roles
+                        {initialUsers.length.toLocaleString()} users across 7 roles
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -150,7 +150,7 @@ export function UserTable({ users: initialUsers }: UserTableProps) {
                     </div>
 
                     <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-                        <FilterDropdown label="Role" value={roleFilter} options={['All Roles', 'AWW', 'Supervisor', 'CDPO', 'Admin']} onChange={setRoleFilter} />
+                        <FilterDropdown label="Role" value={roleFilter} options={['All Roles', 'AWW', 'Supervisor', 'CDPO', 'District Officer', 'Commissioner', 'System Admin', 'Super Admin']} onChange={setRoleFilter} />
                         <FilterDropdown label="Status" value={statusFilter} options={['All', 'Active', 'Locked']} onChange={setStatusFilter} />
                         <FilterDropdown label="Assignment" value={assignmentFilter} options={['All', 'Assigned', 'Unassigned']} onChange={setAssignmentFilter} />
                         <FilterDropdown label="District" value={districtFilter} options={districtOptions} onChange={setDistrictFilter} />
@@ -184,8 +184,11 @@ export function UserTable({ users: initialUsers }: UserTableProps) {
                             {filteredUsers.map((user) => {
                                 const assignedTo =
                                     (user.awcs as any)?.name ||
+                                    (user.panchayats as any)?.name ||
+                                    (user.sectors as any)?.name ||
                                     (user.mandals as any)?.name ||
-                                    (user.districts as any)?.name
+                                    (user.districts as any)?.name ||
+                                    (user.states as any)?.name
 
                                 return (
                                     <tr

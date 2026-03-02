@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Check, Circle, Save, RotateCcw,
     ChevronDown, ChevronRight, ShieldCheck,
@@ -23,12 +23,13 @@ interface PermissionGroup {
 }
 
 const ROLES = [
-    { id: 'AWW', label: 'AWW' },
-    { id: 'SCREENER', label: 'Screener' },
-    { id: 'CDPO', label: 'CDPO' },
-    { id: 'DPO', label: 'DPO' },
-    { id: 'COMMISSIONER', label: 'Commissioner' },
-    { id: 'ADMIN', label: 'Admin' }
+    { id: 'aww', label: 'AWW' },
+    { id: 'supervisor', label: 'Supervisor' },
+    { id: 'cdpo', label: 'CDPO' },
+    { id: 'district_officer', label: 'District Officer' },
+    { id: 'commissioner', label: 'Commissioner' },
+    { id: 'system_admin', label: 'System Admin' },
+    { id: 'super_admin', label: 'Super Admin' }
 ];
 
 const INITIAL_PERMISSIONS: PermissionGroup[] = [
@@ -36,49 +37,49 @@ const INITIAL_PERMISSIONS: PermissionGroup[] = [
         id: 'children',
         label: 'CHILDREN',
         features: [
-            { id: 'reg_child', label: 'Register children', roles: { AWW: 'ALLOWED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_own', label: 'View own AWC children', roles: { AWW: 'ALLOWED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_mandal', label: 'View mandal children', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_cdpo', label: 'View CDPO children', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'ALLOWED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_district', label: 'View district children', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'ALLOWED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_state', label: 'View state children', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'ALLOWED', ADMIN: 'ALLOWED' } },
+            { id: 'reg_child', label: 'Register children', roles: { aww: 'ALLOWED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_own', label: 'View own AWC children', roles: { aww: 'ALLOWED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_mandal', label: 'View mandal children', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_cdpo', label: 'View CDPO children', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'ALLOWED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_district', label: 'View district children', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'ALLOWED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_state', label: 'View state children', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'ALLOWED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
         ]
     },
     {
         id: 'screening',
         label: 'SCREENING',
         features: [
-            { id: 'conduct_q', label: 'Conduct questionnaire', roles: { AWW: 'ALLOWED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'DENIED' } },
-            { id: 'conduct_ai', label: 'Conduct AI protocols', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'DENIED' } },
-            { id: 'view_results', label: 'View screening results', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'ALLOWED', DPO: 'ALLOWED', COMMISSIONER: 'ALLOWED', ADMIN: 'ALLOWED' } },
-            { id: 'view_risk', label: 'View risk scores', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'ALLOWED', DPO: 'ALLOWED', COMMISSIONER: 'ALLOWED', ADMIN: 'ALLOWED' } },
+            { id: 'conduct_q', label: 'Conduct questionnaire', roles: { aww: 'ALLOWED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'DENIED', super_admin: 'DENIED' } },
+            { id: 'conduct_ai', label: 'Conduct AI protocols', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'DENIED', super_admin: 'DENIED' } },
+            { id: 'view_results', label: 'View screening results', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'ALLOWED', district_officer: 'ALLOWED', commissioner: 'ALLOWED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_risk', label: 'View risk scores', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'ALLOWED', district_officer: 'ALLOWED', commissioner: 'ALLOWED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
         ]
     },
     {
         id: 'flags',
         label: 'FLAGS & ESCALATIONS',
         features: [
-            { id: 'raise_flags', label: 'Raise flags', roles: { AWW: 'ALLOWED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'DENIED' } },
-            { id: 'manage_flags', label: 'Manage flags', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'DENIED' } },
-            { id: 'view_escal', label: 'View escalations', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'ALLOWED', DPO: 'ALLOWED', COMMISSIONER: 'ALLOWED', ADMIN: 'ALLOWED' } },
-            { id: 'escal_further', label: 'Escalate further', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'ALLOWED', DPO: 'ALLOWED', COMMISSIONER: 'ALLOWED', ADMIN: 'DENIED' } },
+            { id: 'raise_flags', label: 'Raise flags', roles: { aww: 'ALLOWED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'DENIED', super_admin: 'DENIED' } },
+            { id: 'manage_flags', label: 'Manage flags', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'DENIED', super_admin: 'DENIED' } },
+            { id: 'view_escal', label: 'View escalations', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'ALLOWED', district_officer: 'ALLOWED', commissioner: 'ALLOWED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'escal_further', label: 'Escalate further', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'ALLOWED', district_officer: 'ALLOWED', commissioner: 'ALLOWED', system_admin: 'DENIED', super_admin: 'DENIED' } },
         ]
     },
     {
         id: 'referrals',
         label: 'REFERRALS & INTERVENTIONS',
         features: [
-            { id: 'create_ref', label: 'Create referrals', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'DENIED' } },
-            { id: 'view_pipe', label: 'View referral pipeline', roles: { AWW: 'DENIED', SCREENER: 'ALLOWED', CDPO: 'ALLOWED', DPO: 'ALLOWED', COMMISSIONER: 'ALLOWED', ADMIN: 'ALLOWED' } },
+            { id: 'create_ref', label: 'Create referrals', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'DENIED', super_admin: 'DENIED' } },
+            { id: 'view_pipe', label: 'View referral pipeline', roles: { aww: 'DENIED', supervisor: 'ALLOWED', cdpo: 'ALLOWED', district_officer: 'ALLOWED', commissioner: 'ALLOWED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
         ]
     },
     {
         id: 'admin',
         label: 'ADMIN',
         features: [
-            { id: 'manage_users', label: 'Manage users', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'manage_hier', label: 'Manage hierarchy', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
-            { id: 'view_audit', label: 'View audit log', roles: { AWW: 'DENIED', SCREENER: 'DENIED', CDPO: 'DENIED', DPO: 'DENIED', COMMISSIONER: 'DENIED', ADMIN: 'ALLOWED' } },
+            { id: 'manage_users', label: 'Manage users', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'manage_hier', label: 'Manage hierarchy', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
+            { id: 'view_audit', label: 'View audit log', roles: { aww: 'DENIED', supervisor: 'DENIED', cdpo: 'DENIED', district_officer: 'DENIED', commissioner: 'DENIED', system_admin: 'ALLOWED', super_admin: 'ALLOWED' } },
         ]
     }
 ];
@@ -88,6 +89,16 @@ const RolePermissions: React.FC = () => {
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        const fetchPermissions = async () => {
+            const res = await actions.getRolePermissions();
+            if (res.success && res.data && res.data.length > 0) {
+                setGroups(res.data);
+            }
+        };
+        fetchPermissions();
+    }, []);
 
     const toggleGroup = (groupId: string) => {
         const next = new Set(collapsedGroups);
@@ -159,8 +170,8 @@ const RolePermissions: React.FC = () => {
                         disabled={!isDirty || isSaving}
                         onClick={handleSave}
                         className={`flex items-center space-x-2 px-8 py-2.5 rounded-lg text-[13px] font-bold transition-all shadow-lg ${isDirty && !isSaving
-                                ? 'bg-black text-white shadow-black/10 hover:bg-gray-800'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            ? 'bg-black text-white shadow-black/10 hover:bg-gray-800'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                             }`}
                     >
                         <Save size={16} />

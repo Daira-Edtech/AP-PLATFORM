@@ -90,6 +90,16 @@ const Icons = {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" />
         </svg>
     ),
+    Layers: ({ size = 16, className = "" }) => (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
+        </svg>
+    ),
+    Home: ({ size = 16, className = "" }) => (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+    ),
 };
 
 interface AssignmentNode {
@@ -97,7 +107,7 @@ interface AssignmentNode {
     name: string;
     title: string;
     role: string;
-    type: 'STATE' | 'DISTRICT' | 'CDPO' | 'MANDAL' | 'AWC';
+    type: 'STATE' | 'DISTRICT' | 'MANDAL' | 'SECTOR' | 'PANCHAYAT' | 'AWC';
     status: 'ASSIGNED' | 'VACANT' | 'INACTIVE';
     childrenCount?: number;
     unassignedCount?: number;
@@ -179,7 +189,10 @@ const AssignmentMap: React.FC = () => {
           `}>
                         {node.type === 'STATE' ? <Icons.Building2 size={20} /> :
                             node.type === 'DISTRICT' ? <Icons.MapPin size={20} /> :
-                                node.status === 'ASSIGNED' ? <Icons.UserCheck size={20} /> : <Icons.AlertCircle size={20} />}
+                                node.type === 'MANDAL' ? <Icons.Building2 size={18} /> :
+                                    node.type === 'SECTOR' ? <Icons.Layers size={18} /> :
+                                        node.type === 'PANCHAYAT' ? <Icons.Home size={18} /> :
+                                            node.status === 'ASSIGNED' ? <Icons.UserCheck size={20} /> : <Icons.AlertCircle size={20} />}
                     </div>
 
                     <div className="flex-1 min-w-0">

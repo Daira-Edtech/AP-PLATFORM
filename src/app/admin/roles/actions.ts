@@ -1,30 +1,46 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
 
 export async function getRolePermissions() {
     const supabase = createAdminClient()
 
-    // In a real app, this would be a table join. 
-    // Mocking for now to satisfy "functional" requirement with simulated persistence.
-    // In a real Supabase setup, we'd have a 'role_permissions' table.
+    const { data, error } = await supabase
+        .from('system_settings')
+        .select('setting_value')
+        .eq('setting_key', 'role_permissions')
+        .single()
 
-    // Return mock permissions that would typically come from DB
+    if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching role permissions:', error)
+        return { success: false, error }
+    }
+
     return {
         success: true,
-        data: [] // Placeholder
+        data: data?.setting_value || []
     }
 }
 
 export async function updateRolePermissions(permissions: any) {
     const supabase = createAdminClient()
 
-    // Simulate DB delay
-    await new Promise(resolve => setTimeout(resolve, 800))
+    const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+            setting_key: 'role_permissions',
+            setting_value: permissions,
+            category: 'security',
+            description: 'Platform-wide role-based access control configuration',
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' })
 
-    console.log('UPDATING PERMISSIONS:', JSON.stringify(permissions, null, 2))
+    if (error) {
+        console.error('Error updating role permissions:', error)
+        throw error
+    }
 
-    // In real app: supabase.from('role_permissions').upsert(...)
-
+    revalidatePath('/admin/roles')
     return { success: true }
 }

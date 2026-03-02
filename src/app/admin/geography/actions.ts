@@ -223,3 +223,59 @@ export async function createEntity(type: string, data: any) {
     revalidatePath('/admin/geography')
 }
 
+export async function getEntitiesByParent(parentType: string, parentId: string) {
+    const supabase = getAdminClient()
+    let table = ''
+    let foreignKey = ''
+
+    switch (parentType) {
+        case 'STATE':
+            table = 'districts';
+            foreignKey = 'state_id';
+            break;
+        case 'DISTRICT':
+            table = 'mandals';
+            foreignKey = 'district_id';
+            break;
+        case 'MANDAL':
+            table = 'sectors';
+            foreignKey = 'mandal_id';
+            break;
+        case 'SECTOR':
+            table = 'panchayats';
+            foreignKey = 'sector_id';
+            break;
+        case 'PANCHAYAT':
+            table = 'awcs';
+            foreignKey = 'panchayat_id';
+            break;
+        default:
+            return [];
+    }
+
+    const { data, error } = await supabase
+        .from(table)
+        .select('id, name')
+        .eq(foreignKey, parentId)
+        .order('name');
+
+    if (error) {
+        console.error(`Error fetching ${table}:`, error);
+        return [];
+    }
+
+    return data || [];
+}
+
+export async function getAwcsBySector(sectorId: string) {
+    const supabase = getAdminClient();
+    const { data, error } = await supabase
+        .from('awcs')
+        .select('id, name')
+        .eq('sector_id', sectorId)
+        .order('name');
+
+    if (error) return [];
+    return data || [];
+}
+

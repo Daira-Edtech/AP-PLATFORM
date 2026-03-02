@@ -100,9 +100,21 @@ export async function reassignUser(userId: string, assignment: {
     awc_id?: string | null
 }) {
     const supabase = createAdminClient()
+
+    // Filter out null/undefined values to avoid schema cache errors for missing columns
+    const updateData: any = {};
+    if (assignment.state_id !== undefined) updateData.state_id = assignment.state_id;
+    if (assignment.district_id !== undefined) updateData.district_id = assignment.district_id;
+    if (assignment.mandal_id !== undefined) updateData.mandal_id = assignment.mandal_id;
+    if (assignment.sector_id !== undefined) updateData.sector_id = assignment.sector_id;
+    if (assignment.panchayat_id !== undefined) updateData.panchayat_id = assignment.panchayat_id;
+    if (assignment.awc_id !== undefined) updateData.awc_id = assignment.awc_id;
+
+    if (Object.keys(updateData).length === 0) return { success: true };
+
     const { error } = await supabase
         .from('profiles')
-        .update(assignment)
+        .update(updateData)
         .eq('id', userId)
 
     if (error) throw error
@@ -157,12 +169,28 @@ export async function bulkReassign(userIds: string[], assignment: {
     awc_id?: string | null
 }) {
     const supabase = createAdminClient()
+
+    // Filter out null/undefined values to avoid schema cache errors for missing columns
+    const updateData: any = {};
+    if (assignment.state_id) updateData.state_id = assignment.state_id;
+    if (assignment.district_id) updateData.district_id = assignment.district_id;
+    if (assignment.mandal_id) updateData.mandal_id = assignment.mandal_id;
+    if (assignment.sector_id) updateData.sector_id = assignment.sector_id;
+    if (assignment.panchayat_id) updateData.panchayat_id = assignment.panchayat_id;
+    if (assignment.awc_id) updateData.awc_id = assignment.awc_id;
+
+    // Check if we have anything to update
+    if (Object.keys(updateData).length === 0) return { success: true };
+
     const { error } = await supabase
         .from('profiles')
-        .update(assignment)
+        .update(updateData)
         .in('id', userIds)
 
-    if (error) throw error
+    if (error) {
+        console.error('Bulk reassign error:', error);
+        throw error;
+    }
 
     await supabase.from('audit_log').insert(userIds.map(id => ({
         user_id: id,

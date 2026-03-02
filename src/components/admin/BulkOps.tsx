@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as actions from '@/app/admin/users/actions';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams } from 'next/navigation';
+import * as geoActions from '@/app/admin/geography/actions';
 
 // Icons as SVG components to avoid lucide-react dependency
 const Icons = {
@@ -83,8 +84,8 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
     // Cascading Fetchers
     useEffect(() => {
         if (assignTarget.state) {
-            supabase.from('districts').select('id, name').eq('state_id', assignTarget.state).order('name')
-                .then(({ data }) => setDistricts(data || []));
+            geoActions.getEntitiesByParent('STATE', assignTarget.state)
+                .then(setDistricts);
             setAssignTarget(prev => ({ ...prev, district: '', mandal: '', sector: '', panchayat: '', awc: '' }));
         } else {
             setDistricts([]);
@@ -94,8 +95,8 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
 
     useEffect(() => {
         if (assignTarget.district) {
-            supabase.from('mandals').select('id, name').eq('district_id', assignTarget.district).order('name')
-                .then(({ data }) => setMandals(data || []));
+            geoActions.getEntitiesByParent('DISTRICT', assignTarget.district)
+                .then(setMandals);
             setAssignTarget(prev => ({ ...prev, mandal: '', sector: '', panchayat: '', awc: '' }));
         } else {
             setMandals([]);
@@ -105,8 +106,8 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
 
     useEffect(() => {
         if (assignTarget.mandal) {
-            supabase.from('sectors').select('id, name').eq('mandal_id', assignTarget.mandal).order('name')
-                .then(({ data }) => setSectors(data || []));
+            geoActions.getEntitiesByParent('MANDAL', assignTarget.mandal)
+                .then(setSectors);
             setAssignTarget(prev => ({ ...prev, sector: '', panchayat: '', awc: '' }));
         } else {
             setSectors([]);
@@ -116,8 +117,8 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
 
     useEffect(() => {
         if (assignTarget.sector) {
-            supabase.from('panchayats').select('id, name').eq('sector_id', assignTarget.sector).order('name')
-                .then(({ data }) => setPanchayats(data || []));
+            geoActions.getEntitiesByParent('SECTOR', assignTarget.sector)
+                .then(setPanchayats);
             setAssignTarget(prev => ({ ...prev, panchayat: '', awc: '' }));
         } else {
             setPanchayats([]);
@@ -127,14 +128,12 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
 
     useEffect(() => {
         if (assignTarget.panchayat) {
-            supabase.from('awcs').select('id, name').eq('panchayat_id', assignTarget.panchayat).order('name')
-                .then(({ data }) => setAwcs(data || []));
+            geoActions.getEntitiesByParent('PANCHAYAT', assignTarget.panchayat)
+                .then(setAwcs);
             setAssignTarget(prev => ({ ...prev, awc: '' }));
         } else if (assignTarget.sector) {
-            // Also fetch AWCs that might be linked directly to sector (depending on schema usage)
-            // But usually AWC is under Panchayat. In some cases Panchayat might be NULL.
-            supabase.from('awcs').select('id, name').eq('sector_id', assignTarget.sector).order('name')
-                .then(({ data }) => setAwcs(data || []));
+            geoActions.getAwcsBySector(assignTarget.sector)
+                .then(setAwcs);
             setAssignTarget(prev => ({ ...prev, awc: '' }));
         } else {
             setAwcs([]);
@@ -432,7 +431,7 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
     };
 
     const renderBulkAssign = () => {
-        const unassignedUsers = initialUsers.filter(u => !u.awc_id && !u.mandal_id && !u.district_id);
+        const unassignedUsers = initialUsers.filter(u => !u.awc_id || !u.panchayat_id || !u.sector_id || !u.mandal_id || !u.district_id || !u.state_id);
         return (
             <div className="space-y-6 animate-in fade-in duration-300">
                 <div className="bg-white border border-[#E5E5E5] rounded-xl overflow-hidden shadow-sm">

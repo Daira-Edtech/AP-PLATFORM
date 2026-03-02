@@ -64,22 +64,25 @@ export async function POST(req: Request) {
 
                 if (authData.user) {
                     // Create Profile
+                    const profileData: any = {
+                        id: authData.user.id,
+                        name,
+                        email,
+                        phone: phone || null,
+                        role: role || 'aww',
+                        is_active: true
+                    }
+
+                    if (state_id) profileData.state_id = state_id;
+                    if (district_id) profileData.district_id = district_id;
+                    if (mandal_id) profileData.mandal_id = mandal_id;
+                    if (sector_id) profileData.sector_id = sector_id;
+                    if (panchayat_id) profileData.panchayat_id = panchayat_id;
+                    if (awc_id) profileData.awc_id = awc_id;
+
                     const { error: profileError } = await adminClient
                         .from('profiles')
-                        .insert({
-                            id: authData.user.id,
-                            name,
-                            email,
-                            phone: phone || null,
-                            role: role || 'aww',
-                            awc_id: awc_id || null,
-                            panchayat_id: panchayat_id || null,
-                            sector_id: sector_id || null,
-                            mandal_id: mandal_id || null,
-                            district_id: district_id || null,
-                            state_id: state_id || null,
-                            is_active: true
-                        })
+                        .insert(profileData)
 
 
                     if (profileError) {

@@ -62,6 +62,7 @@ export default async function NewUserPage() {
         { value: 'district_officer', label: 'District Officer' },
         { value: 'commissioner', label: 'Commissioner' },
         { value: 'system_admin', label: 'System Admin' },
+        { value: 'super_admin', label: 'Super Admin' },
     ]
 
     return (

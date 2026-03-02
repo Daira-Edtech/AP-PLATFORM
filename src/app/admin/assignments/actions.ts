@@ -7,103 +7,112 @@ export async function getAssignmentHierarchy() {
 
     // 1. Fetch all geographic data
     const [
+        { data: states },
         { data: districts },
         { data: mandals },
         { data: sectors },
+        { data: panchayats },
         { data: awcs },
         { data: profiles }
     ] = await Promise.all([
-        supabase.from('districts').select('id, name, code').order('name'),
-        supabase.from('mandals').select('id, name, code, district_id').order('name'),
-        supabase.from('sectors').select('id, name, code, mandal_id').order('name'),
-        supabase.from('awcs').select('id, name, code, sector_id, mandal_id').order('name'),
-        supabase.from('profiles').select('id, name, role, awc_id, mandal_id, district_id, state_id, is_active').eq('is_active', true)
+        supabase.from('states').select('id, name').order('name'),
+        supabase.from('districts').select('id, name, state_id').order('name'),
+        supabase.from('mandals').select('id, name, district_id').order('name'),
+        supabase.from('sectors').select('id, name, mandal_id').order('name'),
+        supabase.from('panchayats').select('id, name, sector_id').order('name'),
+        supabase.from('awcs').select('id, name, panchayat_id, sector_id').order('name'),
+        // Fetch ALL profiles to see inactive ones too
+        supabase.from('profiles').select('id, name, role, state_id, district_id, mandal_id, sector_id, panchayat_id, awc_id, is_active')
     ])
 
-    if (!districts) return null
+    if (!states || !districts) return null
 
-    // Helper maps
-    const profileMap = {
-        commissioner: (profiles || []).filter(p => p.role === 'commissioner'),
-        district: (profiles || []).filter(p => p.role === 'district_officer'),
-        cdpo: (profiles || []).filter(p => p.role === 'cdpo'),
-        supervisor: (profiles || []).filter(p => p.role === 'supervisor'),
-        aww: (profiles || []).filter(p => p.role === 'aww')
-    }
+    const allProfiles = profiles || []
 
-    // Build the tree
-    const root: any = {
-        id: 'state-root',
-        name: profileMap.commissioner[0]?.name || 'VACANT',
-        title: 'Andhra Pradesh',
-        role: 'COMMISSIONER',
-        type: 'STATE',
-        status: profileMap.commissioner[0] ? 'ASSIGNED' : 'VACANT',
-        childrenCount: districts.length,
-        children: districts.map(d => {
-            const districtUser = profileMap.district.find(p => p.district_id === d.id)
-            const dMandals = (mandals || []).filter(m => m.district_id === d.id)
-
-            return {
-                id: d.id,
-                name: districtUser?.name || 'VACANT',
-                title: `${d.name} District`,
-                role: 'DISTRICT_OFFICER',
-                type: 'DISTRICT',
-                status: districtUser ? 'ASSIGNED' : 'VACANT',
-                childrenCount: dMandals.length,
-                children: dMandals.map(m => {
-                    const cdpoUser = profileMap.cdpo.find(p => p.mandal_id === m.id)
-                    const mSectors = (sectors || []).filter(s => s.mandal_id === m.id)
-
-                    return {
-                        id: m.id,
-                        name: cdpoUser?.name || 'VACANT',
-                        title: `${m.name} Project`,
-                        role: 'CDPO',
-                        type: 'CDPO',
-                        status: cdpoUser ? 'ASSIGNED' : 'VACANT',
-                        childrenCount: mSectors.length,
-                        children: mSectors.map(s => {
-                            // Since supervisor doesn't have sector_id in profile, check by name/code or assume supervisor at mandal?
-                            // Actually, let's look for supervisor role assigned to mandal if sector_id is missing
-                            const supervisorUser = profileMap.supervisor.find(p => p.mandal_id === m.id)
-                            const sAwcs = (awcs || []).filter(awc => awc.sector_id === s.id)
-
-                            return {
-                                id: s.id,
-                                name: supervisorUser?.name || 'VACANT',
-                                title: `${s.name} Sector`,
-                                role: 'SUPERVISOR',
-                                type: 'MANDAL', // Using MANDAL type as per mock for Sector/Supervisor level
-                                status: supervisorUser ? 'ASSIGNED' : 'VACANT',
-                                childrenCount: sAwcs.length,
-                                children: sAwcs.map(awc => {
-                                    const awwUser = profileMap.aww.find(p => p.awc_id === awc.id)
-                                    return {
-                                        id: awc.id,
-                                        name: awwUser?.name || 'VACANT',
-                                        title: awc.name,
-                                        role: 'AWW',
-                                        type: 'AWC',
-                                        status: awwUser ? 'ASSIGNED' : 'VACANT',
-                                        childrenCount: 0 // Placeholder
-                                    }
-                                })
-                            }
-                        })
-                    }
-                })
+    const buildNode = (
+        id: string,
+        name: string,
+        unitName: string,
+        roleLabel: string,
+        type: 'STATE' | 'DISTRICT' | 'MANDAL' | 'SECTOR' | 'PANCHAYAT' | 'AWC',
+        children: any[] = []
+    ) => {
+        // Find user assigned to this specific unit with a matching role
+        const assignedUser = allProfiles.find(p => {
+            const profileRole = p.role?.toLowerCase();
+            switch (type) {
+                case 'STATE': return p.state_id === id && profileRole === 'commissioner';
+                case 'DISTRICT': return p.district_id === id && profileRole === 'district_officer';
+                case 'MANDAL': return p.mandal_id === id && (profileRole === 'cdpo' || profileRole === 'supervisor');
+                case 'SECTOR': return p.sector_id === id && profileRole === 'supervisor';
+                case 'AWC': return p.awc_id === id && profileRole === 'aww';
+                default: return false;
             }
-        })
+        });
+
+        const status = assignedUser
+            ? (assignedUser.is_active ? 'ASSIGNED' : 'INACTIVE')
+            : 'VACANT';
+
+        return {
+            id: id || `vacant-${type}-${unitName}-${Math.random()}`,
+            name: assignedUser?.name || (status === 'VACANT' ? 'VACANT' : 'NAME UNKNOWN'),
+            title: unitName || 'Unknown Unit',
+            role: roleLabel,
+            type: type,
+            status: status as 'ASSIGNED' | 'VACANT' | 'INACTIVE',
+            childrenCount: children.length,
+            children: children
+        }
     }
 
-    // Stats for sidebar
+    // Build from top down
+    const stateNodes = states.map(s => {
+        const sDistricts = districts.filter(d => d.state_id === s.id);
+
+        return buildNode(s.id, '', s.name, 'COMMISSIONER', 'STATE',
+            sDistricts.map(d => {
+                const dMandals = (mandals || []).filter(m => m.district_id === d.id);
+                return buildNode(d.id, '', d.name, 'DISTRICT OFFICER', 'DISTRICT',
+                    dMandals.map(m => {
+                        const mSectors = (sectors || []).filter(sec => sec.mandal_id === m.id);
+                        return buildNode(m.id, '', m.name, 'CDPO', 'MANDAL',
+                            mSectors.map(sec => {
+                                const secPanchayats = (panchayats || []).filter(p => p.sector_id === sec.id);
+                                return buildNode(sec.id, '', sec.name, 'SUPERVISOR', 'SECTOR',
+                                    secPanchayats.map(p => {
+                                        const pAwcs = (awcs || []).filter(a => a.panchayat_id === p.id);
+                                        return buildNode(p.id, '', p.name, 'PANCHAYAT', 'PANCHAYAT',
+                                            pAwcs.map(a => buildNode(a.id, '', a.name, 'AWW', 'AWC'))
+                                        )
+                                    })
+                                )
+                            })
+                        )
+                    })
+                )
+            })
+        )
+    });
+
+    // Root is either the first state or a virtual root if multiple states
+    const root = (stateNodes.length === 1 ? stateNodes[0] : {
+        id: 'root',
+        name: 'System Root',
+        title: 'All States',
+        role: 'ADMIN',
+        type: 'STATE' as 'STATE',
+        status: 'ASSIGNED' as 'ASSIGNED',
+        childrenCount: stateNodes.length,
+        children: stateNodes
+    }) as any;
+
+    // Stats
     const stats = {
-        unassignedAWWs: (profiles || []).filter(p => p.role === 'aww' && !p.awc_id).length,
-        unassignedSupervisors: (profiles || []).filter(p => p.role === 'supervisor' && !p.mandal_id).length,
-        vacantAWCs: (awcs || []).filter(awc => !profileMap.aww.some(p => p.awc_id === awc.id)).length,
-        vacantSectors: (sectors || []).filter(s => !profileMap.supervisor.some(p => p.mandal_id === s.mandal_id)).length
+        unassignedAWWs: allProfiles.filter(p => p.role === 'aww' && !p.awc_id).length,
+        unassignedSupervisors: allProfiles.filter(p => p.role === 'supervisor' && !p.sector_id).length,
+        vacantAWCs: (awcs || []).filter(a => !allProfiles.some(p => p.awc_id === a.id)).length,
+        vacantSectors: (sectors || []).filter(s => !allProfiles.some(p => p.sector_id === s.id)).length
     }
 
     return { root, stats }

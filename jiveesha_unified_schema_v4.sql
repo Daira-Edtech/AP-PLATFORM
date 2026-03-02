@@ -135,7 +135,8 @@ CREATE TABLE profiles (
   phone TEXT UNIQUE,
   email TEXT,
   role user_role NOT NULL DEFAULT 'aww',
-  awc_id UUID REFERENCES awcs(id),
+  panchayat_id UUID REFERENCES panchayats(id),
+  sector_id UUID REFERENCES sectors(id),
   mandal_id UUID REFERENCES mandals(id),
   district_id UUID REFERENCES districts(id),
   state_id UUID REFERENCES states(id),
@@ -2100,6 +2101,8 @@ CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_awc ON profiles(awc_id);
 CREATE INDEX idx_profiles_mandal ON profiles(mandal_id);
 CREATE INDEX idx_profiles_district ON profiles(district_id);
+CREATE INDEX idx_profiles_sector ON profiles(sector_id);
+CREATE INDEX idx_profiles_panchayat ON profiles(panchayat_id);
 
 -- Children
 CREATE INDEX idx_children_awc ON children(awc_id);

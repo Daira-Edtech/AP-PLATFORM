@@ -1,41 +1,58 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import type { DistrictSummary } from '@/lib/commissioner/types-db'
 
 export async function GET() {
     try {
+        const supabaseServer = await createClient()
+        const { data: { user } } = await supabaseServer.auth.getUser()
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
         const supabase = createAdminClient()
 
-        // Fetch all districts
+        const { data: profile } = await supabase.from('profiles').select('state_id').eq('id', user.id).single()
+        const stateId = profile?.state_id
+
+        if (!stateId) return NextResponse.json({ error: 'Commissioner not assigned to a state' }, { status: 403 })
+
+        // Fetch all districts only for this state
         const { data: districts, error: distError } = await supabase
             .from('districts')
             .select('id, name, code, state_id')
+            .eq('state_id', stateId)
             .order('name')
 
         if (distError || !districts) {
             return NextResponse.json({ error: distError?.message || 'Failed to fetch districts' }, { status: 500 })
         }
 
+        const districtIds = districts.map(d => d.id)
+        if (districtIds.length === 0) return NextResponse.json([])
+
         // Fetch mandals
-        const { data: mandals } = await supabase.from('mandals').select('id, district_id')
+        const { data: mandals } = await supabase.from('mandals').select('id, district_id').in('district_id', districtIds)
+        const mandalIds = (mandals || []).map(m => m.id)
 
         // Fetch AWCs with capacity
-        const { data: awcs } = await supabase.from('awcs').select('id, mandal_id, target_children').eq('is_active', true)
+        const { data: awcs } = await supabase.from('awcs').select('id, mandal_id, target_children').in('mandal_id', mandalIds.length ? mandalIds : [stateId]).eq('is_active', true)
+        const awcIds = (awcs || []).map(a => a.id)
 
         // Fetch children
-        const { data: children } = await supabase.from('children').select('id, awc_id, current_risk_level, last_screening_date').eq('is_active', true)
+        const { data: children } = await supabase.from('children').select('id, awc_id, current_risk_level, last_screening_date').in('awc_id', awcIds.length ? awcIds : [stateId]).eq('is_active', true)
+        const childIds = (children || []).map(c => c.id)
 
         // Fetch flags
-        const { data: flags } = await supabase.from('flags').select('id, child_id, escalated_to, status')
+        const { data: flags } = await supabase.from('flags').select('id, child_id, escalated_to, status').in('child_id', childIds.length ? childIds : [stateId])
 
         // Fetch referrals with timestamps
-        const { data: referrals } = await supabase.from('referrals').select('id, child_id, status, created_at, completed_at')
+        const { data: referrals } = await supabase.from('referrals').select('id, child_id, status, created_at, completed_at').in('child_id', childIds.length ? childIds : [stateId])
 
         // Fetch DPO profiles
-        const { data: dpoProfiles } = await supabase.from('profiles').select('name, district_id').eq('role', 'district_officer').eq('is_active', true)
+        const { data: dpoProfiles } = await supabase.from('profiles').select('name, district_id').eq('role', 'district_officer').in('district_id', districtIds).eq('is_active', true)
 
         // Fetch CDPO profiles
-        const { data: cdpoProfiles } = await supabase.from('profiles').select('id, district_id').eq('role', 'cdpo').eq('is_active', true)
+        const { data: cdpoProfiles } = await supabase.from('profiles').select('id, district_id').eq('role', 'cdpo').in('district_id', districtIds).eq('is_active', true)
 
         // Build DPO name map
         const dpoMap: Record<string, string> = {}

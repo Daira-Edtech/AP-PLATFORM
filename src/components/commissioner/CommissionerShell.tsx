@@ -41,7 +41,9 @@ export default function CommissionerShell({ children, userName, userEmail, avata
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
 
-    const activeView = ROUTE_TO_VIEW[pathname] || AppView.DASHBOARD
+    const activeView = ROUTE_TO_VIEW[pathname]
+        || Object.entries(ROUTE_TO_VIEW).find(([route]) => pathname.startsWith(route + '/'))?.[1] as AppView
+        || AppView.DASHBOARD
 
     const avatar = avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=000&color=fff&bold=true`
 

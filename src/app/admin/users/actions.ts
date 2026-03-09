@@ -16,9 +16,9 @@ export async function updateUserRole(userId: string, role: string) {
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'role_update',
-        resource_type: 'profile',
-        resource_id: userId,
-        details: { new_role: role },
+        table_name: 'profiles',
+        record_id: userId,
+        new_data: { new_role: role },
         purpose: 'Administrative action'
     })
 
@@ -38,9 +38,9 @@ export async function updateUserStatus(userId: string, is_active: boolean) {
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'status_update',
-        resource_type: 'profile',
-        resource_id: userId,
-        details: { is_active },
+        table_name: 'profiles',
+        record_id: userId,
+        new_data: { is_active },
         purpose: 'Administrative action'
     })
 
@@ -55,8 +55,8 @@ export async function deleteUser(userId: string) {
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'user_deletion',
-        resource_type: 'user',
-        resource_id: userId,
+        table_name: 'profiles',
+        record_id: userId,
         purpose: 'Administrative action'
     })
 
@@ -83,8 +83,8 @@ export async function forceLogout(userId: string) {
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'force_logout',
-        resource_type: 'session',
-        resource_id: userId,
+        table_name: 'sessions',
+        record_id: userId,
         purpose: 'Security action'
     })
 
@@ -101,13 +101,12 @@ export async function reassignUser(userId: string, assignment: {
 }) {
     const supabase = createAdminClient()
 
-    // Filter out null/undefined values to avoid schema cache errors for missing columns
-    const updateData: any = {};
+    // Build update payload — only include fields that exist in the live DB
+    // NOTE: sector_id and panchayat_id are NOT in the live profiles table yet
+    const updateData: Record<string, string | null> = {};
     if (assignment.state_id !== undefined) updateData.state_id = assignment.state_id;
     if (assignment.district_id !== undefined) updateData.district_id = assignment.district_id;
     if (assignment.mandal_id !== undefined) updateData.mandal_id = assignment.mandal_id;
-    if (assignment.sector_id !== undefined) updateData.sector_id = assignment.sector_id;
-    if (assignment.panchayat_id !== undefined) updateData.panchayat_id = assignment.panchayat_id;
     if (assignment.awc_id !== undefined) updateData.awc_id = assignment.awc_id;
 
     if (Object.keys(updateData).length === 0) return { success: true };
@@ -122,9 +121,9 @@ export async function reassignUser(userId: string, assignment: {
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'reassignment',
-        resource_type: 'assignment',
-        resource_id: userId,
-        details: assignment,
+        table_name: 'profiles',
+        record_id: userId,
+        new_data: assignment,
         purpose: 'Administrative action'
     })
 
@@ -150,9 +149,9 @@ export async function updateProfile(userId: string, data: { name?: string, phone
     await supabase.from('audit_log').insert({
         user_id: userId,
         action: 'profile_update',
-        resource_type: 'profile',
-        resource_id: userId,
-        details: data,
+        table_name: 'profiles',
+        record_id: userId,
+        new_data: data,
         purpose: 'Administrative action'
     })
 
@@ -170,16 +169,13 @@ export async function bulkReassign(userIds: string[], assignment: {
 }) {
     const supabase = createAdminClient()
 
-    // Filter out null/undefined values to avoid schema cache errors for missing columns
-    const updateData: any = {};
+    // NOTE: sector_id and panchayat_id are NOT in the live profiles table yet
+    const updateData: Record<string, string | null> = {};
     if (assignment.state_id) updateData.state_id = assignment.state_id;
     if (assignment.district_id) updateData.district_id = assignment.district_id;
     if (assignment.mandal_id) updateData.mandal_id = assignment.mandal_id;
-    if (assignment.sector_id) updateData.sector_id = assignment.sector_id;
-    if (assignment.panchayat_id) updateData.panchayat_id = assignment.panchayat_id;
     if (assignment.awc_id) updateData.awc_id = assignment.awc_id;
 
-    // Check if we have anything to update
     if (Object.keys(updateData).length === 0) return { success: true };
 
     const { error } = await supabase
@@ -195,9 +191,9 @@ export async function bulkReassign(userIds: string[], assignment: {
     await supabase.from('audit_log').insert(userIds.map(id => ({
         user_id: id,
         action: 'bulk_reassignment',
-        resource_type: 'assignment',
-        resource_id: id,
-        details: assignment,
+        table_name: 'profiles',
+        record_id: id,
+        new_data: assignment,
         purpose: 'Bulk administrative action'
     })))
 
@@ -218,9 +214,9 @@ export async function bulkUpdateStatus(userIds: string[], is_active: boolean) {
     await supabase.from('audit_log').insert(userIds.map(id => ({
         user_id: id,
         action: 'bulk_status_update',
-        resource_type: 'profile',
-        resource_id: id,
-        details: { is_active },
+        table_name: 'profiles',
+        record_id: id,
+        new_data: { is_active },
         purpose: 'Bulk administrative action'
     })))
 
@@ -260,8 +256,8 @@ export async function createNewUser(data: any) {
         if (authError) throw authError
         if (!userData.user) throw new Error("Could not create auth user")
 
-        // Build profile data dynamically to handle older schemas
-        const profileData: any = {
+        // NOTE: sector_id and panchayat_id are NOT in the live profiles table
+        const profileData: Record<string, any> = {
             id: userData.user.id,
             name: data.name,
             email: data.email,
@@ -274,8 +270,6 @@ export async function createNewUser(data: any) {
             is_active: true
         };
 
-        // Only add these if they are present in the incoming data
-        // We will try to update them, but we'll catch the "missing column" error specifically
         if (data.sector_id) profileData.sector_id = data.sector_id;
         if (data.panchayat_id) profileData.panchayat_id = data.panchayat_id;
 
@@ -284,36 +278,18 @@ export async function createNewUser(data: any) {
             .upsert(profileData)
 
         if (profileError) {
-            // Check if error is due to missing columns (common in early v4 migrations)
-            if (profileError.code === 'PGRST204' || profileError.message?.includes('panchayat_id') || profileError.message?.includes('sector_id')) {
-                console.warn('Schem discrepancy detected. Retrying without sector/panchayat columns...');
-
-                const legacyData = { ...profileData };
-                delete legacyData.sector_id;
-                delete legacyData.panchayat_id;
-
-                const { error: retryError } = await supabase
-                    .from('profiles')
-                    .upsert(legacyData);
-
-                if (retryError) {
-                    await supabase.auth.admin.deleteUser(userData.user.id)
-                    throw retryError;
-                }
-            } else {
-                // Rollback auth user creation if profile fails for other reasons
-                await supabase.auth.admin.deleteUser(userData.user.id)
-                throw profileError
-            }
+            // Rollback auth user creation if profile fails
+            await supabase.auth.admin.deleteUser(userData.user.id)
+            throw profileError
         }
 
         // Audit log
         await supabase.from('audit_log').insert({
             user_id: userData.user.id,
             action: 'user_creation',
-            resource_type: 'user',
-            resource_id: userData.user.id,
-            details: {
+            table_name: 'profiles',
+            record_id: userData.user.id,
+            new_data: {
                 role: data.role, assignments: {
                     state: data.state_id,
                     district: data.district_id,

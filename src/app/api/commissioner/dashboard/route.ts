@@ -1,25 +1,45 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import type { StateKPIs, RiskDistribution, Alert } from '@/lib/commissioner/types-db'
 
 export async function GET(request: Request) {
     try {
+        const supabaseServer = await createClient()
+        const { data: { user } } = await supabaseServer.auth.getUser()
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
         const supabase = createAdminClient()
         const { searchParams } = new URL(request.url)
         const endpoint = searchParams.get('endpoint')
 
+        const { data: profile } = await supabase.from('profiles').select('state_id').eq('id', user.id).single()
+        const stateId = profile?.state_id
+
+        if (!stateId) return NextResponse.json({ error: 'Commissioner not assigned to a state' }, { status: 403 })
+
+        // Pre-fetch valid IDs for the state to filter queries
+        const { data: districts } = await supabase.from('districts').select('id').eq('state_id', stateId)
+        const districtIds = (districts || []).map(d => d.id)
+
+        const { data: mandals } = await supabase.from('mandals').select('id').in('district_id', districtIds.length ? districtIds : [stateId])
+        const mandalIds = (mandals || []).map(m => m.id)
+
+        const { data: awcs } = await supabase.from('awcs').select('id').in('mandal_id', mandalIds.length ? mandalIds : [stateId]).eq('is_active', true)
+        const awcIds = (awcs || []).map(a => a.id)
+        const validAwcIds = awcIds.length ? awcIds : [stateId]
+
         if (endpoint === 'kpis') {
-            // Total active children
-            const { count: totalChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true)
-            // Screened children
-            const { count: screened } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).not('last_screening_date', 'is', null)
-            // Risk levels
-            const { count: highRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'high')
-            const { count: criticalRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'critical')
-            // Active referrals
-            const { count: activeReferrals } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).in('status', ['generated', 'sent', 'scheduled'])
-            // Open flags
-            const { count: openFlags } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('status', ['raised', 'acknowledged', 'in_progress'])
+            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
+            const childIds = (children || []).map(c => c.id)
+            const validChildIds = childIds.length ? childIds : [stateId]
+
+            const { count: totalChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true)
+            const { count: screened } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).not('last_screening_date', 'is', null)
+            const { count: highRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'high')
+            const { count: criticalRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'critical')
+            const { count: activeReferrals } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).in('status', ['generated', 'sent', 'scheduled'])
+            const { count: openFlags } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).in('status', ['raised', 'acknowledged', 'in_progress'])
 
             const total = totalChildren || 0
             const scr = screened || 0
@@ -36,12 +56,12 @@ export async function GET(request: Request) {
         }
 
         if (endpoint === 'risk-distribution') {
-            const { count: total } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).not('last_screening_date', 'is', null)
-            const { count: low } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'low')
-            const { count: medium } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'medium')
-            const { count: high } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'high')
-            const { count: critical } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('current_risk_level', 'critical')
-            const { count: allChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).eq('is_active', true)
+            const { count: total } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).not('last_screening_date', 'is', null)
+            const { count: low } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'low')
+            const { count: medium } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'medium')
+            const { count: high } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'high')
+            const { count: critical } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'critical')
+            const { count: allChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true)
 
             const result: RiskDistribution = {
                 total: total || 0,
@@ -57,11 +77,18 @@ export async function GET(request: Request) {
         if (endpoint === 'alerts') {
             const limitParam = searchParams.get('limit')
             const limit = limitParam ? parseInt(limitParam) : 10
+
+            // For alerts, either targeted directly to user or to children in the state
+            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
+            const childIds = (children || []).map(c => c.id)
+            const validChildIds = childIds.length ? childIds : [stateId]
+
             const { data, error } = await supabase
                 .from('alerts')
                 .select('*')
                 .in('severity', ['critical', 'high'])
                 .eq('is_read', false)
+                .in('related_child_id', validChildIds)
                 .order('created_at', { ascending: false })
                 .limit(limit)
 
@@ -70,16 +97,20 @@ export async function GET(request: Request) {
         }
 
         if (endpoint === 'escalation-summary') {
-            const { count: total } = await supabase.from('flags').select('*', { count: 'exact', head: true }).eq('status', 'escalated')
-            const { count: critical } = await supabase.from('flags').select('*', { count: 'exact', head: true }).eq('status', 'escalated').eq('priority', 'urgent')
-            const { count: stateLevel } = await supabase.from('flags').select('*', { count: 'exact', head: true }).eq('escalated_to', 'state')
+            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
+            const childIds = (children || []).map(c => c.id)
+            const validChildIds = childIds.length ? childIds : [stateId]
+
+            const { count: total } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('status', 'escalated')
+            const { count: critical } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('status', 'escalated').eq('priority', 'urgent')
+            const { count: stateLevel } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('escalated_to', 'state')
 
             return NextResponse.json({ total: total || 0, critical: critical || 0, stateLevel: stateLevel || 0 })
         }
 
         if (endpoint === 'historical-kpis') {
-            // Try kpi_cache
-            const { data: cached } = await supabase.from('kpi_cache').select('period, metrics').eq('level', 'state').order('period', { ascending: true })
+            // Try kpi_cache filtered by this exact state_id
+            const { data: cached } = await supabase.from('kpi_cache').select('period, metrics').eq('level', 'state').eq('entity_id', stateId).order('period', { ascending: true })
             if (cached && cached.length > 0) {
                 return NextResponse.json(cached.map((row: any) => ({
                     name: row.period,
@@ -87,8 +118,13 @@ export async function GET(request: Request) {
                     target: row.metrics?.target || row.metrics?.total_children || 0,
                 })))
             }
+
+            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
+            const childIds = (children || []).map(c => c.id)
+            const validChildIds = childIds.length ? childIds : [stateId]
+
             // Fallback: assessments
-            const { data: assessments } = await supabase.from('assessments').select('assessed_at').order('assessed_at', { ascending: true })
+            const { data: assessments } = await supabase.from('assessments').select('assessed_at').in('child_id', validChildIds).order('assessed_at', { ascending: true })
             if (!assessments || assessments.length === 0) return NextResponse.json([])
             const monthMap: Record<string, number> = {}
             assessments.forEach((a: any) => {

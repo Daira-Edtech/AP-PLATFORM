@@ -13,8 +13,6 @@ export default async function UsersPage() {
                 states(name),
                 districts(name),
                 mandals(name),
-                sectors(name),
-                panchayats(name),
                 awcs(name)
             `)
             .order('created_at', { ascending: false }),

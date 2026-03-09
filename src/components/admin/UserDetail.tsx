@@ -272,7 +272,7 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                     .from('audit_log')
                     .select('*')
                     .eq('user_id', user.id)
-                    .order('timestamp', { ascending: false })
+                    .order('created_at', { ascending: false })
                     .limit(5);
 
                 // 3. Simple activity distribution for last 7 days
@@ -288,13 +288,13 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
 
                 const { data: dailyActivity } = await supabase
                     .from('audit_log')
-                    .select('timestamp')
+                    .select('created_at')
                     .eq('user_id', user.id)
-                    .gte('timestamp', last7Days[0].date);
+                    .gte('created_at', last7Days[0].date);
 
                 if (dailyActivity) {
                     dailyActivity.forEach(act => {
-                        const date = act.timestamp.split('T')[0];
+                        const date = act.created_at.split('T')[0];
                         const dayObj = last7Days.find(d => d.date === date);
                         if (dayObj) dayObj.actions++;
                     });
@@ -306,7 +306,7 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                     .select('*')
                     .eq('user_id', user.id)
                     .eq('action', 'reassignment')
-                    .order('timestamp', { ascending: false });
+                    .order('created_at', { ascending: false });
 
                 setStats({
                     loginCount: logins || 0,
@@ -553,7 +553,7 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                                                 <div className="flex-1">
                                                     <p className="text-[13px] font-bold text-black leading-none">Reassigned</p>
                                                     <p className="text-[11px] text-gray-400 mt-1">
-                                                        {new Date(h.timestamp).toLocaleDateString()} • {h.purpose}
+                                                        {new Date(h.created_at).toLocaleDateString()} • {h.purpose}
                                                     </p>
                                                 </div>
                                             </div>
@@ -608,10 +608,10 @@ export const UserDetail: React.FC<UserDetailProps> = ({ user, onBack }) => {
                                         <div key={i} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg transition-colors">
                                             <div>
                                                 <p className="text-[13px] font-bold text-black">{a.action}</p>
-                                                <p className="text-[11px] text-gray-400">{a.details?.path || a.resource_type || 'System Action'}</p>
+                                                <p className="text-[11px] text-gray-400">{a.new_data?.path || a.table_name || 'System Action'}</p>
                                             </div>
                                             <div className="text-[11px] text-gray-400 font-medium">
-                                                {formatTime(a.timestamp)}
+                                                {formatTime(a.created_at)}
                                             </div>
                                         </div>
                                     ))

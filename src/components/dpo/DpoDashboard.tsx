@@ -16,33 +16,20 @@ import {
     CartesianGrid,
 } from 'recharts';
 import { Scorecard, FunnelStep, AlertItem } from './DpoUI';
-import { KPI } from '@/lib/dpo/types';
+import { KPI, DpoDashboardStats } from '@/lib/dpo/types';
 import { TrendingUp, TrendingDown, ChevronRight, AlertCircle, AlertTriangle, Map, Send, Activity, ShieldCheck, Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-const DpoDashboard: React.FC = () => {
+export default function DpoDashboard({ stats }: { stats: DpoDashboardStats }) {
     const router = useRouter();
+
     const kpis: KPI[] = [
-        { label: 'TOTAL CHILDREN', value: '28,500', trend: [20, 22, 24, 25, 26, 28, 28, 28.5], change: '+1.2%', isPositive: true },
-        { label: 'SCREENED', value: '18,200', trend: [10, 12, 14, 15, 16, 17, 18, 18.2], change: '+4.5%', isPositive: true },
-        { label: 'COVERAGE', value: '64%', trend: [58, 59, 60, 61, 62, 63, 63.5, 64], change: '+3%', isPositive: true },
-        { label: 'HIGH/CRITICAL', value: '1,820', trend: [25, 24, 23, 22, 21, 20, 19, 18.2], change: '-2%', isPositive: true },
-        { label: 'ESCALATIONS', value: '42', trend: [10, 12, 11, 15, 20, 35, 40, 42], change: '+12', isPositive: false },
-        { label: 'ACTIVE REFERRALS', value: '234', trend: [200, 210, 220, 225, 230, 232, 233, 234], change: '+5.1%', isPositive: true },
-    ];
-
-    const riskDistribution = [
-        { name: 'Low', value: 12400, color: '#22c55e' },
-        { name: 'Med', value: 4200, color: '#eab308' },
-        { name: 'High', value: 1200, color: '#f97316' },
-        { name: 'Critical', value: 400, color: '#ef4444' },
-    ];
-
-    const screeningTrend = [
-        { name: 'Jan', val: 1200 }, { name: 'Feb', val: 1400 }, { name: 'Mar', val: 1300 },
-        { name: 'Apr', val: 1600 }, { name: 'May', val: 1800 }, { name: 'Jun', val: 1700 },
-        { name: 'Jul', val: 2000 }, { name: 'Aug', val: 2100 }, { name: 'Sep', val: 2300 },
-        { name: 'Oct', val: 2500 }, { name: 'Nov', val: 2700 }, { name: 'Dec', val: 2850 },
+        { label: 'TOTAL CHILDREN', value: stats.totalChildren.toLocaleString(), trend: [], change: '', isPositive: true },
+        { label: 'SCREENED', value: stats.screenedChildren.toLocaleString(), trend: [], change: '', isPositive: true },
+        { label: 'COVERAGE', value: `${stats.coverageRate}%`, trend: [], change: '', isPositive: true },
+        { label: 'HIGH/CRITICAL', value: (stats.highRiskCount + stats.criticalRiskCount).toLocaleString(), trend: [], change: '', isPositive: false },
+        { label: 'ESCALATIONS', value: stats.escalationsCount.toLocaleString(), trend: [], change: '', isPositive: false },
+        { label: 'ACTIVE REFERRALS', value: stats.activeReferralsCount.toLocaleString(), trend: [], change: '', isPositive: true },
     ];
 
     return (
@@ -52,7 +39,7 @@ const DpoDashboard: React.FC = () => {
                     <h1 className="text-[32px] font-bold text-black tracking-tighter uppercase">District Dashboard</h1>
                     <p className="text-[14px] text-[#888888] font-medium flex items-center gap-2">
                         <Map size={14} />
-                        Kondapur District • 5 CDPOs • 42 Mandals • 680 AWCs
+                        Active District Monitoring • Real-time Data
                     </p>
                 </div>
                 <div className="flex bg-white shadow-sm border border-[#E5E5E5] rounded-xl p-1">
@@ -83,32 +70,39 @@ const DpoDashboard: React.FC = () => {
                             <Activity size={16} /> Regional Performance Density
                         </h3>
                         <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-[#888888]">
-                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-gray-100" /> Low Cov.</div>
+                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-gray-100" /> Lower Cov.</div>
                             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-black" /> Optimal</div>
                         </div>
                     </div>
-                    <div className="h-[380px] bg-[#fcfcfc] rounded-2xl border border-[#F5F5F5] relative overflow-hidden flex items-center justify-center p-6 shadow-inner">
-                        <svg viewBox="0 0 500 400" className="w-full h-full drop-shadow-2xl">
-                            <path d="M50 100 L250 50 L300 150 L100 200 Z" fill="#000000" className="cursor-pointer hover:opacity-90 transition-all hover:scale-[1.02] origin-center" onClick={() => router.push('/dpo/cdpos/north')} />
-                            <text x="140" y="130" fill="white" fontSize="12" fontWeight="900" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>North</text>
-                            <text x="155" y="145" fill="white" fontSize="10" fontWeight="700">84%</text>
-
-                            <path d="M250 50 L450 100 L400 200 L300 150 Z" fill="#222222" className="cursor-pointer hover:opacity-90 transition-all hover:scale-[1.02] origin-center" onClick={() => router.push('/dpo/cdpos/east')} />
-                            <text x="320" y="130" fill="white" fontSize="12" fontWeight="900" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>East</text>
-                            <text x="335" y="145" fill="white" fontSize="10" fontWeight="700">72%</text>
-
-                            <path d="M100 200 L300 150 L400 200 L350 300 L150 280 Z" fill="#555555" className="cursor-pointer hover:opacity-90 transition-all hover:scale-[1.02] origin-center" onClick={() => router.push('/dpo/cdpos/central')} />
-                            <text x="210" y="240" fill="white" fontSize="12" fontWeight="900" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Central</text>
-                            <text x="235" y="255" fill="white" fontSize="10" fontWeight="700">64%</text>
-
-                            <path d="M150 280 L350 300 L300 380 L100 350 Z" fill="#888888" className="cursor-pointer hover:opacity-90 transition-all hover:scale-[1.02] origin-center" onClick={() => router.push('/dpo/cdpos/south')} />
-                            <text x="200" y="340" fill="white" fontSize="12" fontWeight="900" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>South</text>
-                            <text x="215" y="355" fill="white" fontSize="10" fontWeight="700">52%</text>
-
-                            <path d="M20 180 L100 200 L150 280 L100 350 L20 300 Z" fill="#BBBBBB" className="cursor-pointer hover:opacity-90 transition-all hover:scale-[1.02] origin-center" onClick={() => router.push('/dpo/cdpos/west')} />
-                            <text x="50" y="270" fill="#000" fontSize="12" fontWeight="900" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>West</text>
-                            <text x="65" y="285" fill="#000" fontSize="10" fontWeight="700">42%</text>
-                        </svg>
+                    <div className="h-[380px] bg-[#fcfcfc] rounded-2xl border border-[#F5F5F5] relative overflow-hidden flex flex-col items-center justify-center p-6 shadow-inner">
+                        {stats.regionalPerformance.length > 0 ? (
+                            <div className="w-full space-y-4">
+                                {stats.regionalPerformance.map((region, idx) => (
+                                    <div key={idx} className="flex items-center justify-between group/item cursor-pointer" onClick={() => router.push('/dpo/cdpos')}>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-black text-white rounded-xl flex items-center justify-center font-black text-xs uppercase tracking-tighter">
+                                                {region.name.slice(0, 3)}
+                                            </div>
+                                            <div>
+                                                <div className="text-[14px] font-black uppercase tracking-tighter text-black">{region.name}</div>
+                                                <div className="text-[10px] text-[#888] font-bold uppercase tracking-widest">Regional Node</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <div className="text-right">
+                                                <div className="text-[18px] font-black text-black leading-none">{region.coverage}%</div>
+                                                <div className="text-[9px] text-[#888] font-black uppercase tracking-widest mt-1">Coverage</div>
+                                            </div>
+                                            <div className="h-1.5 w-32 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-black transition-all group-hover/item:bg-black/80" style={{ width: `${region.coverage}%` }} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-[#888] font-black uppercase tracking-widest text-[11px]">No Regional Data Found</div>
+                        )}
                     </div>
                 </div>
 
@@ -120,14 +114,14 @@ const DpoDashboard: React.FC = () => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
-                                        data={riskDistribution}
+                                        data={stats.riskDistribution}
                                         innerRadius={80}
                                         outerRadius={110}
                                         paddingAngle={8}
                                         dataKey="value"
                                         stroke="none"
                                     >
-                                        {riskDistribution.map((entry, index) => (
+                                        {stats.riskDistribution.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
@@ -137,19 +131,21 @@ const DpoDashboard: React.FC = () => {
                                 </PieChart>
                             </ResponsiveContainer>
                             <div className="absolute flex flex-col items-center justify-center text-center">
-                                <span className="text-[32px] font-black text-black leading-none">18.2K</span>
+                                <span className="text-[32px] font-black text-black leading-none">
+                                    {stats.screenedChildren > 1000 ? `${(stats.screenedChildren / 1000).toFixed(1)}K` : stats.screenedChildren}
+                                </span>
                                 <span className="text-[10px] text-[#888] font-black uppercase tracking-widest mt-1">Screened</span>
                             </div>
                         </div>
 
                         <div className="w-full grid grid-cols-2 gap-4 mt-10">
-                            {riskDistribution.map((risk) => (
+                            {stats.riskDistribution.map((risk) => (
                                 <div key={risk.name} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-transparent hover:border-black/5 transition-all">
                                     <div className="w-2.5 h-2.5 rounded-full shadow-lg" style={{ backgroundColor: risk.color }} />
                                     <div>
                                         <p className="text-[12px] text-black font-black uppercase tracking-tighter">{risk.name}</p>
                                         <p className="text-[10px] text-[#888] font-bold">
-                                            {Math.round(risk.value / 18200 * 100)}% Index
+                                            {stats.screenedChildren ? Math.round(risk.value / stats.screenedChildren * 100) : 0}% Index
                                         </p>
                                     </div>
                                 </div>
@@ -158,15 +154,15 @@ const DpoDashboard: React.FC = () => {
 
                         <div className="w-full mt-10 pt-8 border-t border-[#F9F9F9]">
                             <div className="flex justify-between items-center mb-3">
-                                <span className="text-[11px] font-black uppercase tracking-widest text-[#888]">Gov Coverage Benchmark</span>
-                                <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black rounded-lg border border-green-100 shadow-sm shadow-green-50">+6% V-Index</span>
+                                <span className="text-[11px] font-black uppercase tracking-widest text-[#888]">Gov Coverage Performance</span>
+                                <span className="px-3 py-1 bg-black text-white text-[10px] font-black rounded-lg border border-black shadow-sm shadow-black/5">Live Status</span>
                             </div>
                             <div className="h-2 w-full bg-[#f0f0f0] rounded-full overflow-hidden">
-                                <div className="h-full bg-black transition-all duration-1000 shadow-[0_0_10px_black]" style={{ width: '64%' }} />
+                                <div className="h-full bg-black transition-all duration-1000 shadow-[0_0_10px_black]" style={{ width: `${stats.coverageRate}%` }} />
                             </div>
                             <div className="flex justify-between mt-3 text-[10px] font-black uppercase tracking-widest">
-                                <span className="text-[#CCC]">District Baseline: 58%</span>
-                                <span className="text-black">Actual: 64% Optimal</span>
+                                <span className="text-[#CCC]">Baseline: 50%</span>
+                                <span className="text-black">Actual: {stats.coverageRate}%</span>
                             </div>
                         </div>
                     </div>
@@ -178,7 +174,7 @@ const DpoDashboard: React.FC = () => {
                     <h3 className="text-[14px] font-black uppercase tracking-widest text-black mb-10">Temporal Screening Velocity</h3>
                     <div className="h-[280px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={screeningTrend}>
+                            <AreaChart data={stats.screeningTrend}>
                                 <defs>
                                     <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#000000" stopOpacity={0.1} />
@@ -216,80 +212,32 @@ const DpoDashboard: React.FC = () => {
                     </div>
                     <div className="space-y-6 flex-1 flex flex-col justify-center px-4">
                         <div className="space-y-6">
-                            <FunnelStep label="Escalated From Field" count={42} total={42} />
-                            <FunnelStep label="Admin Acknowledged" count={30} total={42} />
-                            <FunnelStep label="Active Intervention" count={18} total={42} bottleneck />
-                            <FunnelStep label="Resolved (Census)" count={12} total={42} />
+                            <FunnelStep label="Escalations (Raised/Active)" count={stats.escalationsCount} total={stats.escalationsCount || 100} />
+                            <FunnelStep label="Clinical Referrals (Active)" count={stats.activeReferralsCount} total={stats.activeReferralsCount || 100} />
+                            <div className="p-10 border-2 border-dashed border-gray-100 rounded-2xl text-center">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-[#AAA]">Real-time audit active</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-7 bg-white border border-[#E5E5E5] rounded-2xl p-8 shadow-sm flex flex-col group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                        <Send size={120} />
+                <div className="lg:col-span-12 bg-black border border-white/10 rounded-2xl p-8 shadow-2xl flex flex-col group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <Send size={120} color="white" />
                     </div>
-                    <div className="flex justify-between items-center mb-10 relative z-10">
-                        <h3 className="text-[14px] font-black uppercase tracking-widest text-black">Clinic Referral Funnel</h3>
-                        <button onClick={() => router.push('/dpo/referrals')} className="text-[10px] font-black uppercase tracking-widest text-black hover:underline group-hover:translate-x-1 transition-transform flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                            Flow Metrics <ChevronRight size={14} />
-                        </button>
+                    <div className="flex justify-between items-center mb-1 relative z-10">
+                        <h3 className="text-[14px] font-black uppercase tracking-widest text-white">Live Monitoring Status</h3>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 flex-1 relative z-10">
-                        <div className="space-y-6 flex flex-col justify-center">
-                            <FunnelStep label="Clinical Referrals" count={234} total={234} />
-                            <FunnelStep label="Dispatched to Node" count={198} total={234} />
-                            <FunnelStep label="Slot Realization" count={142} total={234} />
-                            <FunnelStep label="Finalized Outcome" count={108} total={234} />
-                        </div>
-                        <div className="flex flex-col items-center justify-center border-l border-[#F9F9F9] pl-10">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#AAA] mb-2 text-center">Node Latency TAT</span>
-                            <div className="text-[64px] font-black text-red-600 leading-none drop-shadow-lg shadow-red-200">12</div>
-                            <span className="text-[14px] font-black text-black uppercase tracking-widest mt-2">District Days</span>
-                            <div className="mt-6 px-4 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-red-100 flex items-center gap-2">
-                                <AlertTriangle size={14} /> Action Required
-                            </div>
+                    <div className="p-10 flex flex-col items-center justify-center text-center">
+                        <div className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40 mb-4">Database State</div>
+                        <div className="text-[14px] font-bold text-white uppercase tracking-widest">
+                            Showing data for {stats.totalChildren.toLocaleString()} Children across monitored regions
                         </div>
                     </div>
-                </div>
-
-                <div className="lg:col-span-5 bg-white border border-[#E5E5E5] rounded-2xl p-8 shadow-sm flex flex-col group relative overflow-hidden">
-                    <div className="absolute bottom-0 right-0 p-8 opacity-[0.03]">
-                        <Bell size={180} />
-                    </div>
-                    <div className="flex justify-between items-center mb-8 relative z-10">
-                        <h3 className="text-[14px] font-black uppercase tracking-widest text-black">District Nerve Center</h3>
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-red-600">Live Intel</span>
-                        </div>
-                    </div>
-                    <div className="space-y-4 flex-1 relative z-10">
-                        <AlertItem
-                            type="red"
-                            message="NELLORE CLUSTER: 3 critical escalations unresolved for 14+ days. System lockout warning."
-                        />
-                        <AlertItem
-                            type="amber"
-                            message="MANDAL X: Personnel coverage hit 38% floor. Unit replacement protocol active."
-                        />
-                        <AlertItem
-                            type="amber"
-                            message="LOGISTICS: Referral drop-off exceeded 30% in East Sector. Node auditing enabled."
-                        />
-                        <AlertItem
-                            type="red"
-                            message="GOVERNANCE: 2 unauthorized terminal access attempts detected. Security key rotation advised."
-                        />
-                    </div>
-                    <button className="w-full mt-8 py-3 bg-black text-white rounded-xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-800 transition-all shadow-xl shadow-black/10 relative z-10">
-                        Acknowledge All
-                    </button>
                 </div>
             </div>
         </div>
     );
-};
-
-export default DpoDashboard;
+}

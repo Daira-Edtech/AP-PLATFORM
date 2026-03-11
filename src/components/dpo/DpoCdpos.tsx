@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     BarChart,
     Bar,
@@ -13,80 +14,30 @@ import {
 } from 'recharts';
 import { Download, Table as TableIcon, BarChart2, Filter } from 'lucide-react';
 import { CDPOPerformance } from '@/lib/dpo/types';
+import { PerformanceRing, CoverageMiniBar } from './DpoUI';
 
-const PerformanceRing: React.FC<{ score: number }> = ({ score }) => {
-    const color = score > 80 ? '#22c55e' : score > 50 ? '#eab308' : '#ef4444';
-    const radius = 9;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (score / 100) * circumference;
-
-    return (
-        <div className="relative flex items-center justify-center w-[24px] h-[24px]">
-            <svg className="w-full h-full transform -rotate-90">
-                <circle
-                    cx="12"
-                    cy="12"
-                    r={radius}
-                    stroke="#E5E5E5"
-                    strokeWidth="2.5"
-                    fill="transparent"
-                />
-                <circle
-                    cx="12"
-                    cy="12"
-                    r={radius}
-                    stroke={color}
-                    strokeWidth="2.5"
-                    fill="transparent"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={offset}
-                    strokeLinecap="round"
-                />
-            </svg>
-            <span className="absolute text-[8px] font-black">{score}</span>
-        </div>
-    );
-};
-
-const CoverageMiniBar: React.FC<{ coverage: number }> = ({ coverage }) => {
-    return (
-        <div className="h-1 w-full bg-[#E5E5E5] rounded-full overflow-hidden">
-            <div
-                className={`h-full ${coverage < 50 ? 'bg-amber-400' : 'bg-black'}`}
-                style={{ width: `${coverage}%` }}
-            />
-        </div>
-    );
-};
-
-const CDPO_DATA: CDPOPerformance[] = [
-    { id: 1, name: 'Kondapur Central', officer: 'Dr. Anita Rao', mandals: 12, awcs: 145, children: 6200, screened: 5400, coverage: 87, lowRisk: 3800, medRisk: 1200, highRisk: 300, critRisk: 100, escalations: 4, referralsPending: 12, referralsDone: 140, avgResolution: 3.2, performanceScore: 92 },
-    { id: 2, name: 'Nellore North', officer: 'K. Someshwar', mandals: 10, awcs: 120, children: 5800, screened: 2200, coverage: 38, lowRisk: 1500, medRisk: 400, highRisk: 200, critRisk: 100, escalations: 24, referralsPending: 56, referralsDone: 80, avgResolution: 12.5, performanceScore: 42 },
-    { id: 3, name: 'Guntur East', officer: 'P. Lakshmi', mandals: 8, awcs: 110, children: 4900, screened: 3100, coverage: 63, lowRisk: 2100, medRisk: 700, highRisk: 200, critRisk: 100, escalations: 8, referralsPending: 22, referralsDone: 110, avgResolution: 4.8, performanceScore: 78 },
-    { id: 4, name: 'Tirupati South', officer: 'B. Venkatesh', mandals: 6, awcs: 155, children: 7100, screened: 4500, coverage: 63, lowRisk: 3100, medRisk: 900, highRisk: 350, critRisk: 150, escalations: 12, referralsPending: 45, referralsDone: 120, avgResolution: 6.5, performanceScore: 65 },
-    { id: 5, name: 'Vizag West', officer: 'M. Sridevi', mandals: 6, awcs: 150, children: 6500, screened: 4800, coverage: 74, lowRisk: 3400, medRisk: 1000, highRisk: 300, critRisk: 100, escalations: 6, referralsPending: 18, referralsDone: 135, avgResolution: 5.2, performanceScore: 84 },
-];
-
-export default function DpoCdpos() {
+export default function DpoCdpos({ initialData = [] }: { initialData?: CDPOPerformance[] }) {
+    const router = useRouter();
     const [view, setView] = useState<'table' | 'chart'>('table');
     const [sortKey, setSortKey] = useState<keyof CDPOPerformance>('performanceScore');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [highlights, setHighlights] = useState<string[]>([]);
+    const [data, setData] = useState<CDPOPerformance[]>(initialData);
 
     const sortedData = useMemo(() => {
-        return [...CDPO_DATA].sort((a: any, b: any) => {
+        return [...data].sort((a: any, b: any) => {
             if (a[sortKey] < b[sortKey]) return sortOrder === 'asc' ? -1 : 1;
             if (a[sortKey] > b[sortKey]) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [sortKey, sortOrder]);
+    }, [sortKey, sortOrder, data]);
 
     const toggleHighlight = (id: string) => {
         setHighlights(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     }
 
     const totals = useMemo(() => {
-        return CDPO_DATA.reduce((acc, curr) => ({
+        return data.reduce((acc, curr) => ({
             children: acc.children + curr.children,
             screened: acc.screened + curr.screened,
             lowRisk: acc.lowRisk + curr.lowRisk,
@@ -94,16 +45,16 @@ export default function DpoCdpos() {
             highRisk: acc.highRisk + curr.highRisk,
             critRisk: acc.critRisk + curr.critRisk,
             escalations: acc.escalations + curr.escalations,
-            coverage: Math.round(CDPO_DATA.reduce((a, b) => a + b.coverage, 0) / CDPO_DATA.length)
+            coverage: Math.round(data.reduce((a, b) => a + b.coverage, 0) / (data.length || 1))
         }), { children: 0, screened: 0, lowRisk: 0, medRisk: 0, highRisk: 0, critRisk: 0, escalations: 0, coverage: 0 });
-    }, []);
+    }, [data]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-[28px] font-bold tracking-tight text-black">CDPO Comparison</h1>
-                    <p className="text-[14px] text-[#888888] font-medium">5 CDPOs in district</p>
+                    <p className="text-[14px] text-[#888888] font-medium">{data.length} CDPOs in district</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex bg-white border border-[#E5E5E5] rounded-full p-1 shadow-sm">
@@ -160,49 +111,58 @@ export default function DpoCdpos() {
                                 </tr>
                             </thead>
                             <tbody className="text-[13px] text-black">
-                                {sortedData.map((row, idx) => {
-                                    const isBelowTarget = row.coverage < 50;
-                                    const hasHighEscalations = row.escalations > 10;
-                                    const isHighlighted = (highlights.includes('Below Target') && isBelowTarget) ||
-                                        (highlights.includes('High Escalations') && hasHighEscalations);
+                                {sortedData.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="px-4 py-20 text-center text-[#888] font-medium italic">
+                                            No CDPO data found. Please ensure your account has a District assigned.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedData.map((row, idx) => {
+                                        const isBelowTarget = row.coverage < 50;
+                                        const hasHighEscalations = row.escalations > 10;
+                                        const isHighlighted = (highlights.includes('Below Target') && isBelowTarget) ||
+                                            (highlights.includes('High Escalations') && hasHighEscalations);
 
-                                    return (
-                                        <tr
-                                            key={row.id}
-                                            className={`border-b border-[#F0F0F0] hover:bg-gray-50/80 cursor-pointer transition-colors ${isHighlighted ? 'bg-amber-50/50' : ''}`}
-                                        >
-                                            <td className="px-4 py-5 text-[#888888] font-black text-center">{idx + 1}</td>
-                                            <td className="px-4 py-5 font-black">{row.name}</td>
-                                            <td className="px-4 py-5 font-medium text-[#555]">{row.officer}</td>
-                                            <td className="px-4 py-5 text-center font-bold">{row.awcs}</td>
-                                            <td className="px-4 py-5">
-                                                <div className="flex flex-col gap-1.5 w-32">
-                                                    <div className="flex justify-between items-end">
-                                                        <span className={`font-black tracking-tighter ${row.coverage < 50 ? 'text-amber-600' : 'text-black'}`}>{row.coverage}%</span>
-                                                        <span className="text-[10px] font-bold text-[#888]">{row.screened.toLocaleString()} / {row.children.toLocaleString()}</span>
+                                        return (
+                                            <tr
+                                                key={row.id}
+                                                onClick={() => router.push(`/dpo/cdpos/${row.id}`)}
+                                                className={`border-b border-[#F0F0F0] hover:bg-gray-50/80 cursor-pointer transition-colors ${isHighlighted ? 'bg-amber-50/50' : ''}`}
+                                            >
+                                                <td className="px-4 py-5 text-[#888888] font-black text-center">{idx + 1}</td>
+                                                <td className="px-4 py-5 font-black">{row.name}</td>
+                                                <td className="px-4 py-5 font-medium text-[#555]">{row.officer}</td>
+                                                <td className="px-4 py-5 text-center font-bold">{row.awcs}</td>
+                                                <td className="px-4 py-5">
+                                                    <div className="flex flex-col gap-1.5 w-32">
+                                                        <div className="flex justify-between items-end">
+                                                            <span className={`font-black tracking-tighter ${row.coverage < 50 ? 'text-amber-600' : 'text-black'}`}>{row.coverage}%</span>
+                                                            <span className="text-[10px] font-bold text-[#888]">{row.screened.toLocaleString()} / {row.children.toLocaleString()}</span>
+                                                        </div>
+                                                        <CoverageMiniBar coverage={row.coverage} />
                                                     </div>
-                                                    <CoverageMiniBar coverage={row.coverage} />
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-5 text-center text-red-600 font-black">{row.critRisk.toLocaleString()}</td>
-                                            <td className={`px-4 py-5 text-center ${row.escalations > 10 ? 'text-red-600 font-black scale-110' : 'font-bold'}`}>
-                                                {row.escalations}
-                                            </td>
-                                            <td className="px-4 py-5">
-                                                <div className="flex justify-center">
-                                                    <PerformanceRing score={row.performanceScore} />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                </td>
+                                                <td className="px-3 py-5 text-center text-red-600 font-black">{row.critRisk.toLocaleString()}</td>
+                                                <td className={`px-4 py-5 text-center ${row.escalations > 10 ? 'text-red-600 font-black scale-110' : 'font-bold'}`}>
+                                                    {row.escalations}
+                                                </td>
+                                                <td className="px-4 py-5">
+                                                    <div className="flex justify-center">
+                                                        <PerformanceRing score={row.performanceScore} />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
                 ) : (
                     <div className="p-10 h-[500px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={CDPO_DATA} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ECECEC" />
                                 <XAxis dataKey="name" fontSize={11} fontWeight="black" tickLine={false} axisLine={false} dy={15} />
                                 <YAxis fontSize={11} fontWeight="bold" tickLine={false} axisLine={false} dx={-10} />

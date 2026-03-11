@@ -30,7 +30,7 @@ export interface RegionRisk {
 }
 
 export interface CDPOPerformance {
-    id: number;
+    id: string;
     name: string;
     officer: string;
     mandals: number;
@@ -47,6 +47,43 @@ export interface CDPOPerformance {
     referralsDone: number;
     avgResolution: number;
     performanceScore: number;
+}
+
+export interface TrendData {
+    name: string;
+    val: number;
+}
+
+export interface DpoDashboardStats {
+    totalChildren: number;
+    screenedChildren: number;
+    coverageRate: number;
+    highRiskCount: number;
+    criticalRiskCount: number;
+    escalationsCount: number;
+    activeReferralsCount: number;
+    riskDistribution: { name: string; value: number; color: string }[];
+    screeningTrend: TrendData[];
+    regionalPerformance: { name: string; coverage: number; color: string; path: string }[];
+}
+
+export interface RiskAnalysisStats {
+    treemapData: { id: string; name: string; size: number; coverage: number; color: string }[];
+    riskHistory: { name: string; Low: number; Med: number; High: number; Crit: number }[];
+    domainHeatmap: { domain: string; scores: number[] }[];
+    highRiskChildren: {
+        id: string;
+        name: string;
+        age: string;
+        awc: string;
+        mandal: string;
+        cdpo: string;
+        risk: string;
+        score: number;
+        conditions: string;
+        status: string;
+    }[];
+    demographicData: { age: string; screened: number; total: number }[];
 }
 
 export interface Escalation {
@@ -88,4 +125,41 @@ export enum DpoTab {
     CHILDREN = 'Children',
     REPORTS = 'Reports',
     SETTINGS = 'Settings'
+}
+
+export interface MandalPerformance {
+    id: string;
+    name: string;
+    screener: string;
+    awcs: number;
+    children: number;
+    screened: number;
+    coverage: number;
+    flags: number;
+    escalated: number;
+    referrals: number;
+}
+
+export interface CDPODetailStats {
+    id: string;
+    name: string;
+    officer: string;
+    phone?: string;
+    email?: string;
+    mandalsCount: number;
+    sectorsCount: number;
+    panchayatsCount: number;
+    awcsCount: number;
+    childrenCount: number;
+    kpis: KPI[];
+    mandals: MandalPerformance[];
+    riskDistribution: { name: string; value: number; color: string }[];
+    coverageTrend: { name: string; cdpo: number; district: number }[];
+    recentActivities: {
+        icon: string;
+        color: string;
+        bg: string;
+        text: string;
+        time: string;
+    }[];
 }

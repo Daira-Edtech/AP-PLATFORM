@@ -101,12 +101,12 @@ export async function reassignUser(userId: string, assignment: {
 }) {
     const supabase = createAdminClient()
 
-    // Build update payload — only include fields that exist in the live DB
-    // NOTE: sector_id and panchayat_id are NOT in the live profiles table yet
     const updateData: Record<string, string | null> = {};
     if (assignment.state_id !== undefined) updateData.state_id = assignment.state_id;
     if (assignment.district_id !== undefined) updateData.district_id = assignment.district_id;
     if (assignment.mandal_id !== undefined) updateData.mandal_id = assignment.mandal_id;
+    if (assignment.sector_id !== undefined) updateData.sector_id = assignment.sector_id;
+    if (assignment.panchayat_id !== undefined) updateData.panchayat_id = assignment.panchayat_id;
     if (assignment.awc_id !== undefined) updateData.awc_id = assignment.awc_id;
 
     if (Object.keys(updateData).length === 0) return { success: true };
@@ -169,11 +169,12 @@ export async function bulkReassign(userIds: string[], assignment: {
 }) {
     const supabase = createAdminClient()
 
-    // NOTE: sector_id and panchayat_id are NOT in the live profiles table yet
     const updateData: Record<string, string | null> = {};
     if (assignment.state_id) updateData.state_id = assignment.state_id;
     if (assignment.district_id) updateData.district_id = assignment.district_id;
     if (assignment.mandal_id) updateData.mandal_id = assignment.mandal_id;
+    if (assignment.sector_id) updateData.sector_id = assignment.sector_id;
+    if (assignment.panchayat_id) updateData.panchayat_id = assignment.panchayat_id;
     if (assignment.awc_id) updateData.awc_id = assignment.awc_id;
 
     if (Object.keys(updateData).length === 0) return { success: true };

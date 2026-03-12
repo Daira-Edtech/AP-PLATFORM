@@ -157,18 +157,29 @@ export default function DpoCdpoDetail({ data }: { data: CDPODetailStats }) {
                             </div>
                         </div>
                         <div className="w-full mt-6 space-y-3">
-                            <div className="flex justify-between items-center text-[12px]">
-                                <span className="font-black text-[#555555] uppercase">vs District Average</span>
-                                <span className="text-red-600 font-bold">-2% below avg</span>
-                            </div>
-                            <div className="h-2 w-full bg-slate-100 rounded-full relative overflow-hidden">
-                                <div className="h-full bg-black rounded-full transition-all duration-1000" style={{ width: '62%' }} />
-                                <div className="absolute top-0 bottom-0 left-[64%] w-[2px] bg-red-500 z-10" />
-                            </div>
-                            <div className="flex justify-between text-[10px] font-black text-[#888888] uppercase tracking-wider text-center">
-                                <span>This CDPO: 62%</span>
-                                <span>Dist Avg: 64%</span>
-                            </div>
+                            {(() => {
+                                const current = parseInt((data.kpis[2].value as string).replace('%', '')) || 0;
+                                const diff = current - data.districtAvg;
+                                const isPositive = diff >= 0;
+                                return (
+                                    <>
+                                        <div className="flex justify-between items-center text-[12px]">
+                                            <span className="font-black text-[#555555] uppercase">vs District Average</span>
+                                            <span className={`${isPositive ? 'text-green-600' : 'text-red-600'} font-bold`}>
+                                                {Math.abs(diff)}% {isPositive ? 'above' : 'below'} avg
+                                            </span>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-100 rounded-full relative overflow-hidden">
+                                            <div className="h-full bg-black rounded-full transition-all duration-1000" style={{ width: `${current}%` }} />
+                                            <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-10" style={{ left: `${data.districtAvg}%` }} />
+                                        </div>
+                                        <div className="flex justify-between text-[10px] font-black text-[#888888] uppercase tracking-wider text-center">
+                                            <span>This CDPO: {current}%</span>
+                                            <span>Dist Avg: {data.districtAvg}%</span>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -232,18 +243,14 @@ export default function DpoCdpoDetail({ data }: { data: CDPODetailStats }) {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                     <div className="lg:col-span-2 space-y-6">
-                        <FunnelStep label="Generated" count={23} total={23} />
-                        <FunnelStep label="Sent" count={18} total={23} />
-                        <FunnelStep label="Scheduled" count={12} total={23} bottleneck />
-                        <FunnelStep label="Completed" count={8} total={23} />
+                        {data.referralFunnel.map((step, idx) => (
+                            <FunnelStep key={idx} label={step.label} count={step.count} total={step.total} bottleneck={step.bottleneck} />
+                        ))}
                     </div>
                     <div className="lg:border-l border-[#F0F0F0] lg:pl-10 flex flex-col justify-center">
                         <div className="text-[10px] font-black text-[#888888] uppercase tracking-[0.2em] mb-6">Action Required</div>
                         <div className="space-y-4">
-                            {[
-                                { id: 'REF-001', child: 'Arun K.', days: 14, status: 'Critical' },
-                                { id: 'REF-042', child: 'Sita M.', days: 9, status: 'Overdue' }
-                            ].map(ref => (
+                            {data.actionsRequired.length > 0 ? data.actionsRequired.map((ref) => (
                                 <div key={ref.id} className="p-4 bg-slate-50 border border-[#F0F0F0] rounded-[14px] hover:border-black transition-all cursor-pointer shadow-sm">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-[13px] font-black text-black">{ref.child}</span>
@@ -255,7 +262,9 @@ export default function DpoCdpoDetail({ data }: { data: CDPODetailStats }) {
                                         {ref.id} • {ref.days} days pending
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <div className="text-[11px] text-[#888888] font-medium italic">No critical actions pending.</div>
+                            )}
                         </div>
                     </div>
                 </div>

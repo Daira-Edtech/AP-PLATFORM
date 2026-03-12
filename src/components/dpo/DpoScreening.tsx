@@ -5,79 +5,34 @@ import {
     AreaChart, Area, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, CartesianGrid, Legend, Treemap, LineChart, Line
 } from 'recharts';
 import { Scorecard } from './DpoUI';
-import { KPI } from '@/lib/dpo/types';
+import { DpoScreeningStats, KPI } from '@/lib/dpo/types';
 import { ChevronRight, Search, ArrowUpRight, TrendingUp, Filter, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-const DpoScreening: React.FC = () => {
+interface DpoScreeningProps {
+    stats: DpoScreeningStats;
+}
+
+const DpoScreening: React.FC<DpoScreeningProps> = ({ stats }) => {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'Coverage' | 'Risk' | 'Trends'>('Coverage');
     const [trendType, setTrendType] = useState<'Coverage' | 'Risk' | 'Volume'>('Coverage');
 
-    const coverageKpis: KPI[] = [
-        { label: 'TOTAL CHILDREN', value: '28,500', trend: [20, 22, 24, 25, 28.5], change: '+1.2%', isPositive: true },
-        { label: 'SCREENED', value: '18,200', trend: [10, 12, 15, 17, 18.2], change: '+4.5%', isPositive: true },
-        { label: 'UNSCREENED', value: '10,300', trend: [15, 14, 12, 11, 10.3], change: '-2.8%', isPositive: true },
-        { label: 'COVERAGE RATE', value: '64%', trend: [58, 60, 61, 63, 64], change: '+3%', isPositive: true },
-    ];
-
-    const riskKpis = [
-        { label: 'LOW', value: '12,400', color: '#22c55e', percentage: '68%', change: '+2.1%' },
-        { label: 'MEDIUM', value: '4,200', color: '#eab308', percentage: '23%', change: '-0.5%' },
-        { label: 'HIGH', value: '1,200', color: '#f97316', percentage: '7%', change: '-1.2%' },
-        { label: 'CRITICAL', value: '400', color: '#ef4444', percentage: '2%', change: '+0.1%' },
-    ];
-
-    const treemapData = [
-        { id: 1, name: 'Kondapur Central', size: 6200, coverage: 87 },
-        { id: 2, name: 'Nellore North', size: 5800, coverage: 38 },
-        { id: 3, name: 'Guntur East', size: 4900, coverage: 63 },
-        { id: 4, name: 'Tirupati South', size: 7100, coverage: 63 },
-        { id: 5, name: 'Vizag West', size: 6500, coverage: 74 },
-    ];
-
-    const domainHeatmap = [
-        { domain: 'GM (Gross Motor)', scores: [2, 8, 4, 3, 1] },
-        { domain: 'FM (Fine Motor)', scores: [1, 5, 2, 2, 0] },
-        { domain: 'LC (Lang/Comm)', scores: [5, 12, 6, 8, 3] },
-        { domain: 'COG (Cognitive)', scores: [3, 9, 3, 4, 2] },
-        { domain: 'SE (Socio-Emo)', scores: [1, 4, 2, 3, 1] },
-    ];
-
-    const cdpos = ['Central', 'North', 'East', 'South', 'West'];
-
-    const riskHistory = [
-        { name: 'Jan', Low: 60, Med: 25, High: 10, Crit: 5 },
-        { name: 'Feb', Low: 62, Med: 24, High: 10, Crit: 4 },
-        { name: 'Mar', Low: 61, Med: 25, High: 11, Crit: 3 },
-        { name: 'Apr', Low: 64, Med: 23, High: 10, Crit: 3 },
-        { name: 'May', Low: 66, Med: 22, High: 9, Crit: 3 },
-        { name: 'Jun', Low: 68, Med: 23, High: 7, Crit: 2 },
-    ];
-
-    const highRiskChildren = [
-        { id: 10002, name: 'Sita M.', age: '4y 1m', awc: 'AWC 02', mandal: 'Mandal B', cdpo: 'North', risk: 'High', score: 82, conditions: 'Delayed Motor', status: 'Pending' },
-        { id: 10005, name: 'Rajesh K.', age: '3y 8m', awc: 'AWC 14', mandal: 'Mandal X', cdpo: 'North', risk: 'Critical', score: 94, conditions: 'Severe Malnutrition', status: 'Referred' },
-        { id: 10009, name: 'Anjali P.', age: '2y 11m', awc: 'AWC 08', mandal: 'Mandal D', cdpo: 'Central', risk: 'High', score: 78, conditions: 'Cognitive Delay', status: 'Scheduled' },
-        { id: 10012, name: 'Vikram S.', age: '5y 2m', awc: 'AWC 21', mandal: 'Mandal G', cdpo: 'South', risk: 'Critical', score: 91, conditions: 'Multiple Domains', status: 'In Review' },
-    ];
-
-    const multiLineData = [
-        { month: 'Jan', North: 32, Central: 80, East: 55, South: 58, West: 68, target: 75 },
-        { month: 'Feb', North: 34, Central: 82, East: 57, South: 59, West: 70, target: 75 },
-        { month: 'Mar', North: 35, Central: 84, East: 58, South: 61, West: 71, target: 75 },
-        { month: 'Apr', North: 36, Central: 85, East: 60, South: 62, West: 72, target: 75 },
-        { month: 'May', North: 37, Central: 86, East: 62, South: 63, West: 73, target: 75 },
-        { month: 'Jun', North: 38, Central: 87, East: 63, South: 63, West: 74, target: 75 },
-    ];
+    const domainMap: Record<string, string> = {
+        'GM': 'GM (Gross Motor)',
+        'FM': 'FM (Fine Motor)',
+        'LC': 'LC (Lang/Comm)',
+        'COG': 'COG (Cognitive)',
+        'SE': 'SE (Socio-Emo)'
+    };
 
     const getColorByCoverage = (cov: number) => {
-        const opacity = cov / 100;
+        const opacity = Math.max(0.1, cov / 100);
         return `rgba(0, 0, 0, ${opacity})`;
     };
 
     const getColorByConcern = (score: number) => {
-        const opacity = score / 15; // Assuming max score is 15%
+        const opacity = Math.min(1, score / 40); // Scaled for intensity
         return `rgba(0, 0, 0, ${opacity})`;
     };
 
@@ -126,7 +81,7 @@ const DpoScreening: React.FC = () => {
             {activeTab === 'Coverage' && (
                 <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-700">
                     <div className="flex flex-nowrap gap-5 overflow-x-auto pb-4 scrollbar-hide">
-                        {coverageKpis.map(kpi => <Scorecard key={kpi.label} kpi={kpi} />)}
+                        {stats.coverageKpis.map(kpi => <Scorecard key={kpi.label} kpi={kpi} />)}
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -137,7 +92,7 @@ const DpoScreening: React.FC = () => {
                             <div className="h-[380px] w-full bg-[#fcfcfc] rounded-xl border border-[#F5F5F5] overflow-hidden">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <Treemap
-                                        data={treemapData}
+                                        data={stats.treemapData}
                                         dataKey="size"
                                         aspectRatio={4 / 3}
                                         stroke="#fff"
@@ -165,11 +120,7 @@ const DpoScreening: React.FC = () => {
                             <div className="bg-white border-l-8 border-red-500 border-y border-r border-[#E5E5E5] rounded-2xl p-6 shadow-sm">
                                 <h3 className="text-[12px] font-black uppercase tracking-widest text-black mb-6">CRITICAL SUB-CENTERS</h3>
                                 <div className="space-y-5">
-                                    {[
-                                        { name: 'Mandal X', cdpo: 'North', coverage: 32, activity: '2d ago' },
-                                        { name: 'Mandal Y', cdpo: 'North', coverage: 38, activity: 'Yesterday' },
-                                        { name: 'Mandal Z', cdpo: 'South', coverage: 42, activity: '4d ago' },
-                                    ].map(m => (
+                                    {stats.criticalSubCenters.map(m => (
                                         <div key={m.name} className="flex items-center justify-between group cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-all">
                                             <div>
                                                 <p className="font-black text-black text-[13px] uppercase tracking-tight">{m.name}</p>
@@ -191,13 +142,7 @@ const DpoScreening: React.FC = () => {
                                 <h3 className="text-[12px] font-black uppercase tracking-widest text-black mb-6">AGE SEGMENTATION</h3>
                                 <div className="h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={[
-                                            { age: '01', screened: 450, total: 1200 },
-                                            { age: '02', screened: 800, total: 1500 },
-                                            { age: '03', screened: 1200, total: 1800 },
-                                            { age: '04', screened: 1500, total: 2000 },
-                                            { age: '05', screened: 1800, total: 2200 },
-                                        ].map(d => ({ ...d, unscreened: d.total - d.screened }))}>
+                                        <BarChart data={stats.ageSegmentation.map(d => ({ ...d, unscreened: d.total - d.screened }))}>
                                             <XAxis dataKey="age" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val}Y`} />
                                             <Tooltip
                                                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '12px' }}
@@ -221,7 +166,7 @@ const DpoScreening: React.FC = () => {
             {activeTab === 'Risk' && (
                 <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-700">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-                        {riskKpis.map(kpi => (
+                        {stats.riskKpis.map(kpi => (
                             <div key={kpi.label} className="bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-16 h-16 opacity-[0.03] -mr-4 -mt-4 transform rotate-12 group-hover:rotate-45 transition-transform" style={{ color: kpi.color }}>
                                     <TrendingUp size={64} strokeWidth={3} />
@@ -248,13 +193,7 @@ const DpoScreening: React.FC = () => {
                             </h3>
                             <div className="h-[320px]">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={[
-                                        { name: 'Central', Low: 3800, Med: 1200, High: 300, Crit: 100 },
-                                        { name: 'North', Low: 1500, Med: 400, High: 200, Crit: 100 },
-                                        { name: 'East', Low: 2100, Med: 700, High: 200, Crit: 100 },
-                                        { name: 'South', Low: 3100, Med: 900, High: 350, Crit: 150 },
-                                        { name: 'West', Low: 3400, Med: 1000, High: 300, Crit: 100 },
-                                    ]}>
+                                    <BarChart data={stats.interRegionalRisk}>
                                         <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} fontWeight="bold" />
                                         <Tooltip cursor={{ fill: '#fcfcfc' }} />
                                         <Bar dataKey="Low" fill="#22c55e" radius={[3, 3, 0, 0]} />
@@ -271,8 +210,8 @@ const DpoScreening: React.FC = () => {
                             <div className="h-[320px] flex items-center justify-center relative">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
-                                        <Pie data={riskKpis} innerRadius={85} outerRadius={110} paddingAngle={8} dataKey="value" stroke="none">
-                                            {riskKpis.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                        <Pie data={stats.riskKpis} innerRadius={85} outerRadius={110} paddingAngle={8} dataKey="value" stroke="none">
+                                            {stats.riskKpis.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                                         </Pie>
                                         <Tooltip />
                                         <Legend verticalAlign="bottom" iconType="circle" />
@@ -280,7 +219,7 @@ const DpoScreening: React.FC = () => {
                                 </ResponsiveContainer>
                                 <div className="absolute flex flex-col items-center">
                                     <span className="text-[11px] font-black text-[#888] uppercase tracking-widest">District</span>
-                                    <span className="text-[32px] font-black text-black leading-none">64%</span>
+                                    <span className="text-[32px] font-black text-black leading-none">{stats.riskKpis.find(k => k.label === 'LOW')?.percentage || '0%'}</span>
                                     <span className="text-[10px] font-bold text-[#888] uppercase">Secure</span>
                                 </div>
                             </div>
@@ -292,7 +231,7 @@ const DpoScreening: React.FC = () => {
                             <h3 className="text-[14px] font-black uppercase tracking-widest text-black mb-8">Temporal Risk Trends</h3>
                             <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={riskHistory}>
+                                    <AreaChart data={stats.riskHistory}>
                                         <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#F0F0F0" />
                                         <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} fontWeight="bold" />
                                         <YAxis fontSize={10} tickLine={false} axisLine={false} />
@@ -313,13 +252,13 @@ const DpoScreening: React.FC = () => {
                                     <thead>
                                         <tr>
                                             <th className="px-4 py-3 text-left text-[11px] font-black uppercase text-[#888888] tracking-widest">Domain</th>
-                                            {cdpos.map(c => <th key={c} className="px-4 py-3 text-[11px] font-black uppercase text-[#888888] tracking-widest">{c}</th>)}
+                                            {stats.cdpos.map(c => <th key={c} className="px-4 py-3 text-[11px] font-black uppercase text-[#888888] tracking-widest">{c}</th>)}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {domainHeatmap.map(row => (
+                                        {stats.domainHeatmap.map(row => (
                                             <tr key={row.domain} className="border-b border-[#F9F9F9] last:border-none">
-                                                <td className="px-4 py-4 text-left font-bold text-[13px] text-black bg-[#fcfcfc]">{row.domain}</td>
+                                                <td className="px-4 py-4 text-left font-bold text-[13px] text-black bg-[#fcfcfc]">{domainMap[row.domain] || row.domain}</td>
                                                 {row.scores.map((s, idx) => (
                                                     <td key={idx} className="p-1 transition-all">
                                                         <div className="h-10 rounded-lg flex items-center justify-center transition-transform hover:scale-105" style={{ backgroundColor: getColorByConcern(s) }}>
@@ -352,7 +291,7 @@ const DpoScreening: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#F0F0F0]">
-                                    {highRiskChildren.map(c => (
+                                    {stats.highRiskChildren.map(c => (
                                         <tr key={c.id} onClick={() => router.push(`/dpo/children/${c.id}`)} className="hover:bg-gray-50 cursor-pointer group transition-all">
                                             <td className="px-8 py-5">
                                                 <div className="flex items-center gap-2 group-hover:translate-x-1 transition-transform">
@@ -409,7 +348,7 @@ const DpoScreening: React.FC = () => {
                             </div>
                             <div className="h-[450px]">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={multiLineData}>
+                                    <LineChart data={stats.multiLineData}>
                                         <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#F0F0F0" />
                                         <XAxis dataKey="month" fontSize={11} tickLine={false} axisLine={false} fontWeight="black" padding={{ left: 20, right: 20 }} />
                                         <YAxis fontSize={11} tickLine={false} axisLine={false} domain={[0, 100]} padding={{ top: 20, bottom: 20 }} />
@@ -418,11 +357,16 @@ const DpoScreening: React.FC = () => {
                                         />
                                         <Legend iconType="circle" wrapperStyle={{ paddingTop: '40px' }} />
                                         <Line type="monotone" dataKey="target" name="Benchmark (75%)" stroke="#000000" strokeWidth={1.5} strokeDasharray="8 8" dot={false} />
-                                        <Line type="monotone" dataKey="Central" stroke="#000000" strokeWidth={5} dot={{ r: 4, strokeWidth: 2, fill: '#000' }} />
-                                        <Line type="monotone" dataKey="West" stroke="#555555" strokeWidth={3} dot={false} />
-                                        <Line type="monotone" dataKey="East" stroke="#888888" strokeWidth={3} dot={false} />
-                                        <Line type="monotone" dataKey="South" stroke="#AAAAAA" strokeWidth={2} dot={false} />
-                                        <Line type="monotone" dataKey="North" stroke="#DDDDDD" strokeWidth={2} dot={false} strokeDasharray="3 3" />
+                                        {stats.cdpos.map((name, idx) => (
+                                            <Line
+                                                key={name}
+                                                type="monotone"
+                                                dataKey={name}
+                                                stroke={idx === 0 ? '#000000' : idx === 1 ? '#555555' : idx === 2 ? '#888888' : '#AAAAAA'}
+                                                strokeWidth={idx === 0 ? 5 : 3}
+                                                dot={idx === 0 ? { r: 4, strokeWidth: 2, fill: '#000' } : false}
+                                            />
+                                        ))}
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>

@@ -162,4 +162,32 @@ export interface CDPODetailStats {
         text: string;
         time: string;
     }[];
+    referralFunnel: { label: string; count: number; total: number; bottleneck?: boolean }[];
+    actionsRequired: { id: string; child: string; days: number; status: string }[];
+    districtAvg: number;
+}
+
+export interface DpoScreeningStats {
+    coverageKpis: KPI[];
+    riskKpis: { label: string; value: string; color: string; percentage: string; change: string }[];
+    treemapData: { id: string; name: string; size: number; coverage: number }[];
+    criticalSubCenters: { name: string; cdpo: string; coverage: number; activity: string }[];
+    ageSegmentation: { age: string; screened: number; total: number }[];
+    interRegionalRisk: { name: string; Low: number; Med: number; High: number; Crit: number }[];
+    riskHistory: { name: string; Low: number; Med: number; High: number; Crit: number }[];
+    domainHeatmap: { domain: string; scores: number[] }[];
+    highRiskChildren: {
+        id: string;
+        name: string;
+        age: string;
+        awc: string;
+        mandal: string;
+        cdpo: string;
+        risk: string;
+        score: number;
+        conditions: string;
+        status: string;
+    }[];
+    multiLineData: any[]; // CDPO-wise performance trends
+    cdpos: string[];
 }

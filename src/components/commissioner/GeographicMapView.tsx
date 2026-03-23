@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { DISTRICT_MOCK_DATA } from '@/lib/commissioner/constants';
 import { DistrictData, MetricType } from '@/lib/commissioner/types';
+import { AP_DISTRICT_PATHS, AP_VIEWBOX } from '@/data/apDistrictPaths';
 import {
   ChevronDown, Filter, Info, ChevronRight,
   Maximize2, Columns, Layout, ArrowUpRight,
@@ -231,22 +232,6 @@ const GeographicMapView: React.FC = () => {
 const DistrictAnalysisMap: React.FC<{ metric: MetricType, onDistrictSelect: (d: DistrictData) => void }> = ({ metric, onDistrictSelect }) => {
   const [hovered, setHovered] = useState<DistrictData | null>(null);
 
-  const gridPositions = [
-    { id: '10', name: 'Vizianagaram', x: 280, y: 50 },
-    { id: '8', name: 'Srikakulam', x: 310, y: 30 },
-    { id: '9', name: 'Visakhapatnam', x: 260, y: 90 },
-    { id: '3', name: 'East Godavari', x: 235, y: 135 },
-    { id: '11', name: 'West Godavari', x: 210, y: 165 },
-    { id: '5', name: 'Krishna', x: 185, y: 195 },
-    { id: '4', name: 'Guntur', x: 155, y: 225 },
-    { id: '7', name: 'Prakasam', x: 125, y: 265 },
-    { id: '13', name: 'Nellore', x: 115, y: 325 },
-    { id: '12', name: 'Kadapa', x: 85, y: 285 },
-    { id: '2', name: 'Chittoor', x: 75, y: 355 },
-    { id: '1', name: 'Anantapur', x: 45, y: 295 },
-    { id: '6', name: 'Kurnool', x: 65, y: 235 },
-  ];
-
   const getMetricValue = (d: DistrictData | undefined) => {
     if (!d) return 0;
     switch (metric) {
@@ -283,73 +268,49 @@ const DistrictAnalysisMap: React.FC<{ metric: MetricType, onDistrictSelect: (d: 
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center relative bg-[#050A0F] rounded-xl overflow-hidden group">
-      {/* Satellite Background synced with Dashboard scale */}
-      <div
-        className="absolute inset-0 transition-transform duration-1000 group-hover:scale-105"
-        style={{
-          backgroundImage: 'url("/ap_satellite.png")',
-          backgroundSize: '160%',
-          backgroundPosition: '55% 35%',
-          opacity: 0.8
-        }}
-      />
-
-      {/* Premium darkening overlay */}
-      <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-
-      <svg viewBox="0 0 600 500" className="w-[95%] h-[95%] drop-shadow-[0_0_30px_rgba(0,0,0,0.6)] relative z-10">
-        {/* 1. Srikakulam */}
-        <path d="M500,40 L560,30 L590,80 L520,110 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '8')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '8')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '8')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="545" y="70" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Srikakulam</text>
-
-        {/* 2. Vizianagaram */}
-        <path d="M440,80 L500,40 L520,110 L470,140 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '10')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '10')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '10')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="485" y="100" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Vizian</text>
-
-        {/* 3. Visakhapatnam */}
-        <path d="M380,120 L440,80 L470,140 L420,170 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '9')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '9')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '9')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="425" y="140" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Visakha</text>
-
-        {/* 4. East Godavari */}
-        <path d="M320,160 L380,120 L420,170 L360,200 L320,200 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '3')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '3')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '3')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="365" y="175" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>E. Godavari</text>
-
-        {/* 5. West Godavari */}
-        <path d="M280,210 L320,160 L320,200 L360,200 L330,240 L280,240 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '11')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '11')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '11')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="315" y="215" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>W. Godavari</text>
-
-        {/* 6. Krishna */}
-        <path d="M220,240 L280,210 L280,240 L330,240 L310,300 L240,280 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '5')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '5')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '5')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="270" y="260" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Krishna</text>
-
-        {/* 7. Guntur */}
-        <path d="M160,280 L220,240 L240,280 L310,300 L240,350 L180,330 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '4')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '4')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '4')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="220" y="300" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Guntur</text>
-
-        {/* 8. Prakasam */}
-        <path d="M100,340 L160,280 L180,330 L240,350 L200,420 L120,400 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '7')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '7')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '7')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="160" y="370" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Prakasam</text>
-
-        {/* 9. Nellore */}
-        <path d="M120,400 L200,420 L180,480 L100,470 L90,420 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '13')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '13')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '13')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="145" y="440" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Nellore</text>
-
-        {/* 10. Kadapa */}
-        <path d="M30,340 L100,340 L120,400 L90,420 L100,470 L40,450 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '12')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '12')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '12')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="70" y="400" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Kadapa</text>
-
-        {/* 11. Chittoor */}
-        <path d="M10,420 L40,450 L100,470 L80,495 L10,490 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '2')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '2')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '2')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="45" y="475" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Chittoor</text>
-
-        {/* 12. Anantapur */}
-        <path d="M10,300 L30,340 L40,450 L10,420 L5,340 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '1')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '1')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '1')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="20" y="375" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Anantapur</text>
-
-        {/* 13. Kurnool */}
-        <path d="M10,210 L160,280 L100,340 L30,340 L10,300 Z" fill={getColorForMetric(getMetricValue(DISTRICT_MOCK_DATA.find(d => d.id === '6')!))} fillOpacity="0.45" stroke="rgba(255,255,255,0.2)" strokeWidth="1" className="cursor-pointer hover:fill-opacity-80 transition-all" onClick={() => onDistrictSelect(DISTRICT_MOCK_DATA.find(d => d.id === '6')!)} onMouseEnter={() => setHovered(DISTRICT_MOCK_DATA.find(d => d.id === '6')!)} onMouseLeave={() => setHovered(null)} />
-        <text x="60" y="280" fill="white" fontSize="9" fontWeight="bold" textAnchor="middle" style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}>Kurnool</text>
+    <div className="w-full h-full flex items-center justify-center relative bg-[#050A0F] rounded-xl overflow-hidden">
+      <svg viewBox={AP_VIEWBOX} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        {/* Satellite and districts in same SVG = always aligned */}
+        <image
+          href="/ap_satellite_new.png"
+          x="0" y="0"
+          width="580" height="480"
+          preserveAspectRatio="none"
+        />
+        <rect x="0" y="0" width="580" height="480" fill="black" opacity="0.2" />
+        {AP_DISTRICT_PATHS.map((district) => {
+          const districtData = DISTRICT_MOCK_DATA.find(d => d.id === district.id);
+          const val = getMetricValue(districtData);
+          const isHovered = hovered?.id === district.id;
+          return (
+            <g key={district.id}>
+              <path
+                d={district.path}
+                fill={getColorForMetric(val)}
+                fillOpacity={isHovered ? 0.85 : 0.45}
+                stroke={isHovered ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)'}
+                strokeWidth={isHovered ? 2 : 0.8}
+                className="cursor-pointer transition-all duration-200"
+                onClick={() => districtData && onDistrictSelect(districtData)}
+                onMouseEnter={() => districtData && setHovered(districtData)}
+                onMouseLeave={() => setHovered(null)}
+              />
+              <text
+                x={district.labelX}
+                y={district.labelY}
+                fill="white"
+                fontSize="8"
+                fontWeight="bold"
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="pointer-events-none select-none"
+                style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,1))' }}
+              >
+                {district.name}
+              </text>
+            </g>
+          );
+        })}
       </svg>
 
       {hovered && (

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import type { StateKPIs, RiskDistribution, Alert } from '@/lib/commissioner/types-db';
+import type { Escalation, EscalationTimelineEvent } from '@/lib/commissioner/types';
 
 /**
  * Fetch executive dashboard KPIs.
@@ -233,4 +234,205 @@ export async function getHistoricalKPIs(): Promise<TrendDataPoint[]> {
             target: 0,
         };
     });
+}
+
+/**
+ * Fetch all escalations that have been escalated to state level.
+ * Returns data in the Escalation format for the EscalationView component.
+ */
+export async function getCommissionerEscalations(): Promise<Escalation[]> {
+    const supabase = createClient();
+
+    // Fetch all flags escalated to state level
+    const { data: flags, error: flagsError } = await supabase
+        .from('flags')
+        .select('*')
+        .eq('escalated_to', 'state')
+        .order('created_at', { ascending: false });
+
+    if (flagsError || !flags || flags.length === 0) {
+        console.warn('No state-level escalations found:', flagsError?.message);
+        return [];
+    }
+
+    // Get unique child IDs from flags
+    const childIds = [...new Set(flags.map(f => f.child_id).filter(Boolean))];
+    if (childIds.length === 0) return [];
+
+    // Fetch children with their AWC info
+    const { data: children } = await supabase
+        .from('children')
+        .select('id, name, dob, gender, awc_id')
+        .in('id', childIds);
+
+    if (!children || children.length === 0) return [];
+
+    // Get unique AWC IDs
+    const awcIds = [...new Set(children.map(c => c.awc_id).filter(Boolean))];
+
+    // Fetch AWCs with mandal info
+    const { data: awcs } = awcIds.length > 0
+        ? await supabase
+            .from('awcs')
+            .select('id, name, mandal_id')
+            .in('id', awcIds)
+        : { data: [] };
+
+    // Get unique mandal IDs
+    const mandalIds = [...new Set((awcs || []).map(a => a.mandal_id).filter(Boolean))];
+
+    // Fetch mandals with district info
+    const { data: mandals } = mandalIds.length > 0
+        ? await supabase
+            .from('mandals')
+            .select('id, name, district_id')
+            .in('id', mandalIds)
+        : { data: [] };
+
+    // Get unique district IDs
+    const districtIds = [...new Set((mandals || []).map(m => m.district_id).filter(Boolean))];
+
+    // Fetch districts
+    const { data: districts } = districtIds.length > 0
+        ? await supabase
+            .from('districts')
+            .select('id, name')
+            .in('id', districtIds)
+        : { data: [] };
+
+    // Build lookup maps for efficient access
+    const districtMap: Record<string, string> = (districts || []).reduce(
+        (acc, d) => { acc[d.id] = d.name; return acc; },
+        {} as Record<string, string>
+    );
+
+    const mandalMap: Record<string, { name: string; districtId: string; districtName: string }> = (mandals || []).reduce(
+        (acc, m) => {
+            acc[m.id] = {
+                name: m.name,
+                districtId: m.district_id,
+                districtName: districtMap[m.district_id] || 'Unknown District'
+            };
+            return acc;
+        },
+        {} as Record<string, { name: string; districtId: string; districtName: string }>
+    );
+
+    const awcMap: Record<string, { name: string; mandalId: string; mandalName: string; districtName: string }> = (awcs || []).reduce(
+        (acc, a) => {
+            const mandal = mandalMap[a.mandal_id];
+            acc[a.id] = {
+                name: a.name,
+                mandalId: a.mandal_id,
+                mandalName: mandal?.name || 'Unknown Mandal',
+                districtName: mandal?.districtName || 'Unknown District'
+            };
+            return acc;
+        },
+        {} as Record<string, { name: string; mandalId: string; mandalName: string; districtName: string }>
+    );
+
+    const childMap: Record<string, { name: string; dob: string; gender: string; awcId: string; awc: typeof awcMap[string] | null }> = (children || []).reduce(
+        (acc, c) => {
+            acc[c.id] = {
+                name: c.name,
+                dob: c.dob,
+                gender: c.gender,
+                awcId: c.awc_id,
+                awc: awcMap[c.awc_id] || null
+            };
+            return acc;
+        },
+        {} as Record<string, { name: string; dob: string; gender: string; awcId: string; awc: typeof awcMap[string] | null }>
+    );
+
+    const now = new Date();
+
+    // Map flags to Escalation format
+    const escalations: Escalation[] = flags.map((flag) => {
+        const child = childMap[flag.child_id];
+        const awcInfo = child?.awc;
+
+        // Calculate days open
+        const createdAt = flag.created_at ? new Date(flag.created_at) : now;
+        const daysOpen = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Map priority from flag to Escalation priority
+        let priority: 'Critical' | 'High' | 'Medium' | 'Low' = 'Medium';
+        if (flag.priority === 'urgent' || flag.priority === 'critical' || flag.priority === 'emergency') {
+            priority = 'Critical';
+        } else if (flag.priority === 'high') {
+            priority = 'High';
+        } else if (flag.priority === 'low') {
+            priority = 'Low';
+        }
+
+        // Build escalation path
+        const path: string[] = [
+            'AWW',
+            awcInfo?.mandalName ? `Mandal Team (${awcInfo.mandalName})` : 'Mandal Team',
+            'CDPO',
+            awcInfo?.districtName ? `DPO ${awcInfo.districtName}` : 'DPO',
+            'State Commissioner'
+        ];
+
+        // Build timeline from flag data
+        const timeline: EscalationTimelineEvent[] = [];
+
+        if (flag.created_at) {
+            timeline.push({
+                date: new Date(flag.created_at).toISOString().split('T')[0],
+                event: flag.title || 'Flag Raised',
+                role: 'AWW',
+                note: flag.description || undefined
+            });
+        }
+
+        if (flag.acknowledged_at) {
+            timeline.push({
+                date: new Date(flag.acknowledged_at).toISOString().split('T')[0],
+                event: 'Acknowledged by CDPO',
+                role: 'CDPO'
+            });
+        }
+
+        // Add escalation to state event
+        timeline.push({
+            date: flag.updated_at
+                ? new Date(flag.updated_at).toISOString().split('T')[0]
+                : new Date().toISOString().split('T')[0],
+            event: 'Escalated to State Command',
+            role: 'DPO',
+            note: 'Case escalated for state-level intervention'
+        });
+
+        // Map status
+        let status: 'Active' | 'In Progress' | 'Resolved' = 'Active';
+        if (flag.status === 'resolved') {
+            status = 'Resolved';
+        } else if (flag.status === 'acknowledged' || flag.status === 'in_progress') {
+            status = 'In Progress';
+        }
+
+        return {
+            id: `ESC-${flag.id.substring(0, 4).toUpperCase()}`,
+            childName: child?.name || 'Unknown Child',
+            childId: flag.child_id || 'Unknown',
+            priority,
+            daysOpen,
+            location: {
+                district: awcInfo?.districtName || 'Unknown District',
+                cdpo: awcInfo?.mandalName || 'Unknown CDPO',
+                mandal: awcInfo?.mandalName || 'Unknown Mandal',
+                awc: awcInfo?.name || 'Unknown AWC'
+            },
+            path,
+            districtNotes: flag.description || 'No district notes available.',
+            timeline,
+            status,
+            outcome: flag.status === 'resolved' ? 'Case resolved' : undefined
+        };
+    });
+
+    return escalations;
 }

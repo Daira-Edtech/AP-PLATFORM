@@ -2,30 +2,52 @@
 
 import React, { useState } from 'react';
 import { Escalation, KPI } from '@/lib/commissioner/types';
-import { MOCK_ESCALATIONS, DISTRICT_MOCK_DATA } from '@/lib/commissioner/constants';
+import { DISTRICT_MOCK_DATA } from '@/lib/commissioner/constants';
 import KPICard from '@/components/commissioner/KPICard';
-import { 
-  AlertCircle, ChevronRight, ChevronDown, ChevronUp, 
+import {
+  AlertCircle, ChevronRight, ChevronDown, ChevronUp,
   MapPin, Clock, MessageSquare, ShieldAlert, User,
   ArrowRight, Filter, Download, MoreHorizontal, CheckCircle2
 } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 
-const EscalationView: React.FC = () => {
+export interface EscalationViewProps {
+  escalations: Escalation[];
+}
+
+const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
   const [activeTab, setActiveTab] = useState('Active');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Calculate tab counts from real data
+  const activeCount = escalations.filter(e => e.status === 'Active').length;
+  const inProgressCount = escalations.filter(e => e.status === 'In Progress').length;
+  const resolvedCount = escalations.filter(e => e.status === 'Resolved').length;
+
   const tabs = [
-    { label: 'Active', count: 128 },
-    { label: 'In Progress', count: 42 },
-    { label: 'Resolved', count: 340 }
+    { label: 'Active', count: activeCount },
+    { label: 'In Progress', count: inProgressCount },
+    { label: 'Resolved', count: resolvedCount }
   ];
 
+  // Filter escalations based on active tab
+  const filteredEscalations = escalations.filter(esc => esc.status === activeTab);
+
+  // Calculate KPIs from real data
+  const openEscalations = escalations.filter(e => e.status !== 'Resolved').length;
+  const criticalLongPending = escalations.filter(e => e.priority === 'Critical' && e.daysOpen >= 21).length;
+  const avgResolution = escalations.length > 0
+    ? Math.round(escalations.reduce((sum, e) => sum + e.daysOpen, 0) / escalations.length)
+    : 0;
+  const resolutionRate = escalations.length > 0
+    ? Math.round((resolvedCount / escalations.length) * 100)
+    : 0;
+
   const escalationKPIs: KPI[] = [
-    { id: 'e1', label: 'OPEN ESCALATIONS', value: '128', delta: 12, trend: [110, 115, 120, 128], accent: '#000000' },
-    { id: 'e2', label: 'CRITICAL (21d+)', value: '18', delta: 5, trend: [12, 14, 16, 18], accent: '#EF4444' },
-    { id: 'e3', label: 'AVG RESOLUTION', value: '11 days', delta: -8, trend: [14, 13, 12, 11], accent: '#3B82F6' },
-    { id: 'e4', label: 'RESOLUTION RATE', value: '73%', delta: 4, trend: [65, 68, 70, 73], accent: '#22C55E' },
+    { id: 'e1', label: 'OPEN ESCALATIONS', value: String(openEscalations), delta: 0, trend: [openEscalations], accent: '#000000' },
+    { id: 'e2', label: 'CRITICAL (21d+)', value: String(criticalLongPending), delta: 0, trend: [criticalLongPending], accent: '#EF4444' },
+    { id: 'e3', label: 'AVG RESOLUTION', value: `${avgResolution} days`, delta: 0, trend: [avgResolution], accent: '#3B82F6' },
+    { id: 'e4', label: 'RESOLUTION RATE', value: `${resolutionRate}%`, delta: 0, trend: [resolutionRate], accent: '#22C55E' },
   ];
 
   const toggleExpand = (id: string) => {
@@ -48,20 +70,22 @@ const EscalationView: React.FC = () => {
       </div>
 
       {/* CRITICAL ALERT BANNER */}
-      <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-8 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg animate-pulse">
-            <AlertCircle size={22} />
+      {criticalLongPending > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-8 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg animate-pulse">
+              <AlertCircle size={22} />
+            </div>
+            <div>
+              <h3 className="text-red-900 font-bold text-[16px]">Attention: {criticalLongPending} Critical Cases Escalated</h3>
+              <p className="text-red-700 text-[13px]">These cases have been pending at State Level for 21+ days without resolution.</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-red-900 font-bold text-[16px]">Attention: 18 Critical Cases Escalated</h3>
-            <p className="text-red-700 text-[13px]">These cases have been pending at State Level for 21+ days without resolution.</p>
-          </div>
+          <button className="bg-red-600 text-white px-6 py-2 rounded font-black text-[12px] uppercase tracking-widest hover:bg-red-700 transition-all">
+            Priority Audit
+          </button>
         </div>
-        <button className="bg-red-600 text-white px-6 py-2 rounded font-black text-[12px] uppercase tracking-widest hover:bg-red-700 transition-all">
-          Priority Audit
-        </button>
-      </div>
+      )}
 
       <div className="flex flex-nowrap overflow-x-auto gap-4 mb-8 pb-2 scrollbar-hide">
         {escalationKPIs.map(kpi => <KPICard key={kpi.id} {...kpi} />)}
@@ -87,7 +111,12 @@ const EscalationView: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {MOCK_ESCALATIONS.map((esc) => (
+            {filteredEscalations.length === 0 && (
+              <div className="bg-white border border-[#E5E5E5] rounded-xl p-12 text-center">
+                <div className="text-[#888] text-[14px] font-medium">No escalations in this category</div>
+              </div>
+            )}
+            {filteredEscalations.map((esc) => (
               <div 
                 key={esc.id} 
                 className={`bg-white border border-[#E5E5E5] rounded-xl shadow-sm transition-all duration-300 relative overflow-hidden ${

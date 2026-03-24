@@ -6,6 +6,7 @@ import StateMap from '@/components/commissioner/StateMap';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Download, AlertCircle, Calendar, ArrowRight, Loader2 } from 'lucide-react';
 import { KPI } from '@/lib/commissioner/types';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery';
 import type { StateKPIs, RiskDistribution, DistrictSummary, Alert } from '@/lib/commissioner/types-db';
 
@@ -15,38 +16,50 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
+// Batch response type
+interface BatchResponse {
+  kpis: StateKPIs;
+  riskDistribution: RiskDistribution;
+  escalationSummary: { total: number; critical: number; stateLevel: number };
+}
+
 const ExecutiveDashboard: React.FC = () => {
   const [timeFilter, setTimeFilter] = useState('Quarter');
+  const { t } = useLanguage();
 
-  const { data: kpis, loading: kpisLoading } = useSupabaseQuery<StateKPIs>(
-    async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=kpis'); return r.json(); }, []
+  // CRITICAL DATA: Single batch call for KPIs, risk distribution, and escalation summary
+  const { data: batchData, loading: batchLoading } = useSupabaseQuery<BatchResponse>(
+    async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=batch'); return r.json(); }, []
   );
-  const { data: riskDist, loading: riskLoading } = useSupabaseQuery<RiskDistribution>(
-    async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=risk-distribution'); return r.json(); }, []
-  );
+
+  // Extract batch data
+  const kpis = batchData?.kpis;
+  const riskDist = batchData?.riskDistribution;
+  const escalation = batchData?.escalationSummary;
+
+  // SECONDARY DATA: Districts and alerts load in parallel (less critical)
   const { data: districts, loading: districtsLoading } = useSupabaseQuery<DistrictSummary[]>(
     async () => { const r = await fetch('/api/commissioner/districts'); return r.json(); }, []
   );
   const { data: alerts } = useSupabaseQuery<Alert[]>(
     async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=alerts&limit=5'); return r.json(); }, []
   );
-  const { data: escalation } = useSupabaseQuery<{ total: number; critical: number; stateLevel: number }>(
-    async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=escalation-summary'); return r.json(); }, []
-  );
+
+  // TERTIARY DATA: Historical trends (can load last)
   const { data: historicalTrend } = useSupabaseQuery<{ name: string; value: number; target: number }[]>(
     async () => { const r = await fetch('/api/commissioner/dashboard?endpoint=historical-kpis'); return r.json(); }, []
   );
 
-  const isLoading = kpisLoading || riskLoading || districtsLoading;
+  const isLoading = batchLoading;
 
   // Build KPI cards from live data
   const executiveKPIs: KPI[] = kpis ? [
-    { id: '1', label: 'TOTAL CHILDREN', value: formatNumber(kpis.total_children), delta: 0, trend: [], accent: '#3B82F6' },
-    { id: '2', label: 'SCREENED', value: formatNumber(kpis.screened), delta: 0, trend: [], accent: '#22C55E' },
-    { id: '3', label: 'COVERAGE', value: `${kpis.coverage_pct}%`, delta: 0, trend: [], accent: '#000000' },
-    { id: '4', label: 'HIGH RISK', value: formatNumber(kpis.high_risk), delta: 0, trend: [], accent: '#EF4444' },
-    { id: '5', label: 'CRITICAL', value: formatNumber(kpis.critical_risk), delta: 0, trend: [], accent: '#000000' },
-    { id: '6', label: 'ACTIVE REFERRALS', value: formatNumber(kpis.active_referrals), delta: 0, trend: [], accent: '#6B7280' },
+    { id: '1', label: t('kpi.totalChildren'), value: formatNumber(kpis.total_children), delta: 0, trend: [], accent: '#3B82F6' },
+    { id: '2', label: t('kpi.screened'), value: formatNumber(kpis.screened), delta: 0, trend: [], accent: '#22C55E' },
+    { id: '3', label: t('kpi.coverage'), value: `${kpis.coverage_pct}%`, delta: 0, trend: [], accent: '#000000' },
+    { id: '4', label: t('kpi.highRisk'), value: formatNumber(kpis.high_risk), delta: 0, trend: [], accent: '#EF4444' },
+    { id: '5', label: t('kpi.critical'), value: formatNumber(kpis.critical_risk), delta: 0, trend: [], accent: '#000000' },
+    { id: '6', label: t('kpi.activeReferrals'), value: formatNumber(kpis.active_referrals), delta: 0, trend: [], accent: '#6B7280' },
   ] : [];
 
   // Risk pie chart data from live distribution
@@ -95,26 +108,29 @@ const ExecutiveDashboard: React.FC = () => {
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">State Dashboard</h1>
+          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('dashboard.title')}</h1>
           <p className="text-[14px] text-[#888888] font-medium">
-            Andhra Pradesh — {totalDistricts} Districts, {totalMandals} Mandals, {formatNumber(totalAWCs)} AWCs
+            {t('dashboard.subtitle')} — {totalDistricts} {t('dashboard.districts')}, {totalMandals} {t('dashboard.mandals')}, {formatNumber(totalAWCs)} {t('dashboard.awcs')}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="bg-white border border-[#E5E5E5] rounded p-1 flex">
-            {['Week', 'Month', 'Quarter', 'Year', 'FY'].map((f) => (
+            {(['Week', 'Month', 'Quarter', 'Year', 'FY'] as const).map((f) => {
+              const filterKeyMap: Record<string, string> = { 'Week': 'filter.week', 'Month': 'filter.month', 'Quarter': 'filter.quarter', 'Year': 'filter.year', 'FY': 'filter.fy' };
+              return (
               <button
                 key={f}
                 onClick={() => setTimeFilter(f)}
                 className={`px-4 py-1.5 text-[12px] font-bold rounded-sm transition-all ${timeFilter === f ? 'bg-black text-white' : 'text-[#888] hover:text-black'
                   }`}
               >
-                {f}
+                {t(filterKeyMap[f])}
               </button>
-            ))}
+              );
+            })}
           </div>
           <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-            <Download size={16} /> Export
+            <Download size={16} /> {t('dashboard.export')}
           </button>
         </div>
       </div>
@@ -127,28 +143,28 @@ const ExecutiveDashboard: React.FC = () => {
             {isLoading ? (
               <div className="flex items-center gap-3 py-4">
                 <Loader2 className="animate-spin text-[#888]" size={20} />
-                <span className="text-[14px] text-[#888]">Loading programme data...</span>
+                <span className="text-[14px] text-[#888]">{t('dashboard.loading')}</span>
               </div>
             ) : (
               <>
                 <h2 className="text-[22px] font-bold text-black mb-3 tracking-tight">
-                  Programme Reach: {formatNumber(kpis?.screened || 0)} children screened <span className="text-[#888] font-medium">({kpis?.coverage_pct || 0}% of target)</span>
+                  {t('dashboard.programmeReach')}: {formatNumber(kpis?.screened || 0)} {t('dashboard.childrenScreened')} <span className="text-[#888] font-medium">({kpis?.coverage_pct || 0}% {t('dashboard.ofTarget')})</span>
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-8 gap-y-4 mb-4">
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">High/Critical Identified</span>
+                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">{t('kpi.highCriticalIdentified')}</span>
                     <span className="text-[18px] font-bold">
                       {formatNumber((kpis?.high_risk || 0) + (kpis?.critical_risk || 0))} <span className="text-[13px] font-medium text-[#888]">({highCritPct}%)</span>
                     </span>
                   </div>
                   <div className="h-8 w-[1px] bg-[#EEE]" />
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">Referred</span>
+                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">{t('kpi.referred')}</span>
                     <span className="text-[18px] font-bold">{formatNumber(kpis?.active_referrals || 0)}</span>
                   </div>
                   <div className="h-8 w-[1px] bg-[#EEE]" />
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">Open Flags</span>
+                    <span className="text-[11px] font-bold text-[#888] uppercase tracking-wider">{t('kpi.openFlags')}</span>
                     <span className="text-[18px] font-bold">{formatNumber(kpis?.open_flags || 0)}</span>
                   </div>
                 </div>
@@ -157,7 +173,7 @@ const ExecutiveDashboard: React.FC = () => {
           </div>
           <div className="flex flex-col items-end shrink-0">
             <button className="flex items-center gap-2 text-black font-bold text-[14px] group-hover:gap-3 transition-all">
-              View full analysis <ArrowRight size={18} />
+              {t('dashboard.viewFullAnalysis')} <ArrowRight size={18} />
             </button>
           </div>
         </div>
@@ -179,8 +195,8 @@ const ExecutiveDashboard: React.FC = () => {
         </div>
         <div className="col-span-10 lg:col-span-4 flex flex-col h-full">
           <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm flex flex-col h-full">
-            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-6">Statewide Risk Distribution</h3>
-            {riskLoading ? (
+            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-6">{t('risk.title')}</h3>
+            {batchLoading ? (
               <div className="flex-1 flex items-center justify-center">
                 <Loader2 className="animate-spin text-[#888]" size={24} />
               </div>
@@ -204,9 +220,9 @@ const ExecutiveDashboard: React.FC = () => {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                      <span className="text-[12px] font-bold text-[#888] uppercase block">Total</span>
+                      <span className="text-[12px] font-bold text-[#888] uppercase block">{t('risk.total')}</span>
                       <span className="text-[20px] font-black">{totalScreened > 1000 ? `${(totalScreened / 1000).toFixed(1)}k` : totalScreened}</span>
-                      <span className="text-[10px] text-[#AAA] block">Screened</span>
+                      <span className="text-[10px] text-[#AAA] block">{t('risk.screenedLabel')}</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-3 mt-6 w-full max-w-[300px]">
@@ -223,8 +239,8 @@ const ExecutiveDashboard: React.FC = () => {
                 </div>
                 <div className="mt-8 pt-6 border-t border-[#F5F5F5]">
                   <div className="flex justify-between items-center bg-amber-50 border border-amber-100 p-3 rounded-lg">
-                    <span className="text-[12px] text-amber-800 font-medium">National Benchmark: &lt;8%</span>
-                    <span className="text-[12px] font-bold text-amber-600">State: {highCritPct}%</span>
+                    <span className="text-[12px] text-amber-800 font-medium">{t('risk.nationalBenchmark')}: &lt;8%</span>
+                    <span className="text-[12px] font-bold text-amber-600">{t('header.state')}: {highCritPct}%</span>
                   </div>
                 </div>
               </>
@@ -237,10 +253,10 @@ const ExecutiveDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">Quarterly Screening Trend</h3>
+            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">{t('chart.quarterlyTrend')}</h3>
             <div className="flex items-center gap-4 text-[11px] font-bold text-[#888]">
-              <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] bg-black" /> Actual</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] bg-[#AAA] border-t border-dashed" /> Target</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] bg-black" /> {t('chart.actual')}</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] bg-[#AAA] border-t border-dashed" /> {t('chart.target')}</div>
             </div>
           </div>
           <div className="h-[280px]">
@@ -264,7 +280,7 @@ const ExecutiveDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-          <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-6">District Performance Ranking</h3>
+          <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-6">{t('chart.districtRanking')}</h3>
           {districtsLoading ? (
             <div className="h-[280px] flex items-center justify-center">
               <Loader2 className="animate-spin text-[#888]" size={24} />
@@ -293,15 +309,15 @@ const ExecutiveDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
         <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">State Escalations</h3>
-            <button className="text-[12px] font-bold text-[#888] hover:text-black">View all →</button>
+            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">{t('esc.title')}</h3>
+            <button className="text-[12px] font-bold text-[#888] hover:text-black">{t('esc.viewAll')}</button>
           </div>
           <div className="flex gap-8 mb-6 p-4 bg-[#F9F9F9] rounded-lg">
-            <div><span className="text-[10px] font-bold text-[#888] uppercase block">Total</span><span className="text-[20px] font-black">{escTotal}</span></div>
+            <div><span className="text-[10px] font-bold text-[#888] uppercase block">{t('esc.total')}</span><span className="text-[20px] font-black">{escTotal}</span></div>
             <div className="w-[1px] bg-[#E5E5E5]" />
-            <div><span className="text-[10px] font-bold text-[#888] uppercase block">Critical</span><span className="text-[20px] font-black text-red-600">{escCritical}</span></div>
+            <div><span className="text-[10px] font-bold text-[#888] uppercase block">{t('esc.critical')}</span><span className="text-[20px] font-black text-red-600">{escCritical}</span></div>
             <div className="w-[1px] bg-[#E5E5E5]" />
-            <div><span className="text-[10px] font-bold text-[#888] uppercase block">State Level</span><span className="text-[20px] font-black">{escStateLevel}</span></div>
+            <div><span className="text-[10px] font-bold text-[#888] uppercase block">{t('esc.stateLevel')}</span><span className="text-[20px] font-black">{escStateLevel}</span></div>
           </div>
           <div className="space-y-4">
             {(districts || []).slice(0, 5).map(d => (
@@ -318,8 +334,8 @@ const ExecutiveDashboard: React.FC = () => {
 
         <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">Critical Alerts</h3>
-            <button className="text-[12px] font-bold text-[#888] hover:text-black">View all →</button>
+            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight">{t('alerts.title')}</h3>
+            <button className="text-[12px] font-bold text-[#888] hover:text-black">{t('esc.viewAll')}</button>
           </div>
           <div className="space-y-3">
             {alerts && alerts.length > 0 ? (
@@ -345,7 +361,7 @@ const ExecutiveDashboard: React.FC = () => {
                 <div className="flex gap-3 p-3 bg-[#F9F9F9] border-l-4 border-[#888] rounded">
                   <Calendar className="text-[#888] shrink-0" size={18} />
                   <p className="text-[13px] text-[#555] leading-tight">
-                    No critical alerts at this time. System is operating normally.
+                    {t('alerts.noAlerts')}
                   </p>
                 </div>
               </>

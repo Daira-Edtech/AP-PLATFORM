@@ -8,6 +8,7 @@ import {
    AlertTriangle, Filter, Download, Calendar
 } from 'lucide-react';
 import KPICard from '@/components/commissioner/KPICard';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 const Skeleton = ({ className = '' }: { className?: string }) => (
    <div className={`animate-pulse bg-gray-100 rounded ${className}`} />
@@ -16,6 +17,7 @@ const Skeleton = ({ className = '' }: { className?: string }) => (
 const WorkforceOverview: React.FC = () => {
    // ═══ STATE ═══
    const router = useRouter();
+   const { t } = useLanguage();
    const [loading, setLoading] = useState(true);
    const [kpis, setKpis] = useState<any>(null);
    const [districtData, setDistrictData] = useState<any[]>([]);
@@ -61,12 +63,12 @@ const WorkforceOverview: React.FC = () => {
 
    // ═══ DERIVED ═══
    const workforceKPIs = kpis ? [
-      { id: 'w1', label: 'TOTAL AWWS', value: (kpis.totalAwws || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
-      { id: 'w2', label: 'MANDAL SCREENERS', value: (kpis.supervisors || 0).toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
-      { id: 'w3', label: 'CDPOs / DPOs', value: (kpis.cdpos || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
-      { id: 'w4', label: 'POSITIONS FILLED', value: `${kpis.positionsFilled || 0}%`, delta: 0, trend: [], accent: '#22C55E' },
-      { id: 'w5', label: 'TRAINING COMPLIANCE', value: `${kpis.trainingCompliance || 0}%`, delta: 0, trend: [], accent: '#F59E0B' },
-      { id: 'w6', label: 'AVG AWW:CHILD', value: kpis.avgChildRatio > 0 ? `1:${kpis.avgChildRatio}` : 'N/A', delta: 0, trend: [], accent: '#6B7280' },
+      { id: 'w1', label: t('workforce.kpi.totalAWWs'), value: (kpis.totalAwws || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
+      { id: 'w2', label: t('workforce.kpi.screeners'), value: (kpis.supervisors || 0).toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
+      { id: 'w3', label: t('workforce.kpi.cdpos'), value: (kpis.cdpos || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
+      { id: 'w4', label: t('workforce.kpi.filled'), value: `${kpis.positionsFilled || 0}%`, delta: 0, trend: [], accent: '#22C55E' },
+      { id: 'w5', label: t('workforce.kpi.training'), value: `${kpis.trainingCompliance || 0}%`, delta: 0, trend: [], accent: '#F59E0B' },
+      { id: 'w6', label: t('workforce.kpi.ratio'), value: kpis.avgChildRatio > 0 ? `1:${kpis.avgChildRatio}` : 'N/A', delta: 0, trend: [], accent: '#6B7280' },
    ] : [];
 
    const filteredDistricts = districtData.filter((d: any) =>
@@ -105,12 +107,12 @@ const WorkforceOverview: React.FC = () => {
          {/* HEADER */}
          <div className="flex justify-between items-end mb-8">
             <div>
-               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Workforce Overview</h1>
-               <p className="text-[14px] text-[#888888] font-medium">Statewide Human Resource Health & Operational Capacity</p>
+               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('workforce.title')}</h1>
+               <p className="text-[14px] text-[#888888] font-medium">{t('workforce.subtitle')}</p>
             </div>
             <div className="flex gap-3">
                <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-                  <Download size={16} /> HR Roster
+                  <Download size={16} /> {t('workforce.hrRoster')}
                </button>
             </div>
          </div>
@@ -124,14 +126,14 @@ const WorkforceOverview: React.FC = () => {
          <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm mb-8 overflow-hidden">
             <div className="p-6 border-b border-[#F5F5F5] flex justify-between items-center bg-[#F9F9F9]/50">
                <div>
-                  <h3 className="text-[16px] font-black uppercase tracking-tight">Workforce by District</h3>
-                  <p className="text-[12px] text-[#888]">Comprehensive headcount and compliance metrics</p>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight">{t('workforce.byDistrict')}</h3>
+                  <p className="text-[12px] text-[#888]">{t('workforce.metricsDesc')}</p>
                </div>
                <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#888]" />
                   <input
                      type="text"
-                     placeholder="Search districts..."
+                     placeholder={t('workforce.searchDist')}
                      value={searchTerm}
                      onChange={(e) => setSearchTerm(e.target.value)}
                      className="pl-9 pr-4 py-2 bg-white border border-[#E5E5E5] rounded text-[12px] w-64 outline-none focus:ring-1 focus:ring-black"
@@ -143,14 +145,14 @@ const WorkforceOverview: React.FC = () => {
                   <table className="w-full text-left">
                      <thead className="bg-[#F9F9F9] text-[10px] font-black uppercase tracking-widest text-[#888] border-b border-[#EEE]">
                         <tr>
-                           <th className="px-8 py-4">District</th>
-                           <th className="px-4 py-4 text-center">AWWs (Filled/Target)</th>
-                           <th className="px-4 py-4 text-center">Screeners</th>
-                           <th className="px-4 py-4 text-center">CDPOs</th>
-                           <th className="px-4 py-4 text-center">Vacancy %</th>
-                           <th className="px-4 py-4 text-center">Training %</th>
-                           <th className="px-4 py-4 text-center">AWW:Child Ratio</th>
-                           <th className="px-8 py-4 text-right">Comp. Score</th>
+                           <th className="px-8 py-4">{t('table.district')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.awwsFilled')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.screeners')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.cdpos')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.vacancyPct')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.trainingPct')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.awwRatio')}</th>
+                           <th className="px-8 py-4 text-right">{t('table.compScore')}</th>
                         </tr>
                      </thead>
                      <tbody className="text-[13px] divide-y divide-[#F5F5F5]">
@@ -195,17 +197,17 @@ const WorkforceOverview: React.FC = () => {
                   </table>
                ) : (
                   <div className="py-12 text-center text-[#888] text-[13px]">
-                     {districtData.length === 0 ? 'No workforce data available.' : 'No districts matching your search.'}
+                     {districtData.length === 0 ? t('workforce.noData') : t('workforce.noSearch')}
                   </div>
                )}
             </div>
             <div className="p-6 bg-[#F9F9F9] border-t border-[#EEE] flex justify-between items-center">
                <div className="flex gap-6">
-                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-[10px] font-black text-[#888] uppercase tracking-widest">High Vacancy (&gt;10%)</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /><span className="text-[10px] font-black text-[#888] uppercase tracking-widest">Training Lag (&lt;80%)</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-[10px] font-black text-[#888] uppercase tracking-widest">{t('workforce.highVacancy')}</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /><span className="text-[10px] font-black text-[#888] uppercase tracking-widest">{t('workforce.trainingLag')}</span></div>
                </div>
                <button className="text-[12px] font-black text-black uppercase tracking-widest hover:gap-2 transition-all flex items-center">
-                  View All {districtData.length} Districts <ChevronRight size={16} />
+                  {t('workforce.viewAll')} {districtData.length} {t('workforce.districts')} <ChevronRight size={16} />
                </button>
             </div>
          </div>
@@ -215,8 +217,8 @@ const WorkforceOverview: React.FC = () => {
             <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                <div className="flex justify-between items-center mb-8">
                   <div>
-                     <h3 className="text-[16px] font-black uppercase tracking-tight">Training Compliance Heatmap</h3>
-                     <p className="text-[12px] text-[#888]">Monthly session activity rate by district</p>
+                     <h3 className="text-[16px] font-black uppercase tracking-tight">{t('workforce.trainingHeatmap')}</h3>
+                     <p className="text-[12px] text-[#888]">{t('workforce.monthlySession')}</p>
                   </div>
                   <div className="flex gap-2">
                      <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm" /><span className="text-[9px] font-bold text-[#888]">90%+</span></div>
@@ -257,8 +259,8 @@ const WorkforceOverview: React.FC = () => {
             <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                <div className="flex justify-between items-center mb-8">
                   <div>
-                     <h3 className="text-[16px] font-black uppercase tracking-tight">Workforce Activity Frequency</h3>
-                     <p className="text-[12px] text-[#888]">Aggregated statewide screening frequency (Past 12 weeks)</p>
+                     <h3 className="text-[16px] font-black uppercase tracking-tight">{t('workforce.activityFreq')}</h3>
+                     <p className="text-[12px] text-[#888]">{t('workforce.activityDesc')}</p>
                   </div>
                   <Calendar size={20} className="text-[#DDD]" />
                </div>
@@ -270,19 +272,19 @@ const WorkforceOverview: React.FC = () => {
                      ))}
                   </div>
                   <div className="flex justify-between text-[10px] font-black text-[#AAA] uppercase tracking-widest mt-2 px-1">
-                     <span>12 Weeks Ago</span>
-                     <span>Today</span>
+                     <span>{t('workforce.12Weeks')}</span>
+                     <span>{t('workforce.today')}</span>
                   </div>
                </div>
 
                <div className="mt-8 grid grid-cols-2 gap-4">
                   <div className="p-4 bg-[#F9F9F9] rounded-lg border border-[#EEE]">
-                     <span className="text-[10px] font-bold text-[#888] uppercase block mb-1">Peak Activity Day</span>
+                     <span className="text-[10px] font-bold text-[#888] uppercase block mb-1">{t('workforce.peakDay')}</span>
                      <span className="text-[16px] font-black">{activityData?.peakDay || 'N/A'}</span>
                   </div>
                   <div className="p-4 bg-[#F9F9F9] rounded-lg border border-[#EEE]">
-                     <span className="text-[10px] font-bold text-[#888] uppercase block mb-1">Avg Sessions / AWW</span>
-                     <span className="text-[16px] font-black">{activityData?.avgSessionsPerWeek || 0} / week</span>
+                     <span className="text-[10px] font-bold text-[#888] uppercase block mb-1">{t('workforce.avgSessions')}</span>
+                     <span className="text-[16px] font-black">{activityData?.avgSessionsPerWeek || 0} / {t('workforce.week')}</span>
                   </div>
                </div>
             </div>
@@ -296,23 +298,19 @@ const WorkforceOverview: React.FC = () => {
                      <div className="w-10 h-10 bg-red-600 rounded flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                         <AlertTriangle size={20} />
                      </div>
-                     <h3 className="text-[20px] font-black uppercase tracking-tight">Vacancy Risk Mapping</h3>
+                     <h3 className="text-[20px] font-black uppercase tracking-tight">{t('workforce.vacancyRisk')}</h3>
                   </div>
                   <p className="text-[15px] text-zinc-400 leading-relaxed mb-8 max-w-xl">
-                     {vacancyData?.topVacancyDistricts?.length > 0 ? (
-                        <>Strategic vacancy tracking identifies high-risk zones where recruitment lag is impacting screening coverage by up to <span className="text-red-500 font-bold">{vacancyData.coverageLoss}%</span>. Priority recruitment recommended for {vacancyData.topVacancyDistricts.map((d: any) => d.name).join(' and ')} zones.</>
-                     ) : (
-                        'All districts are fully staffed. No vacancy risk detected.'
-                     )}
+                     {t('workforce.vacancyDesc')} <span className="text-red-500 font-bold">{vacancyData?.coverageLoss || 0}%</span>. {t('workforce.priorityRecruit')} {vacancyData?.topVacancyDistricts?.map((d: any) => d.name).join(' and ') || 'N/A'} zones.
                   </p>
                   <div className="flex gap-6">
                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-[#666] uppercase">Open Positions</span>
+                        <span className="text-[10px] font-bold text-[#666] uppercase">{t('workforce.openPos')}</span>
                         <span className="text-[24px] font-black text-red-500">{vacancyData?.openPositions || 0}</span>
                      </div>
                      <div className="w-[1px] h-10 bg-zinc-800" />
                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-[#666] uppercase">Est. Coverage Loss</span>
+                        <span className="text-[10px] font-bold text-[#666] uppercase">{t('workforce.estLoss')}</span>
                         <span className="text-[24px] font-black">{vacancyData?.coverageLoss || 0}%</span>
                      </div>
                   </div>
@@ -330,7 +328,7 @@ const WorkforceOverview: React.FC = () => {
                </div>
             </div>
             <button className="absolute bottom-8 right-8 bg-white text-black px-6 py-2 rounded font-black text-[12px] uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-95">
-               Open Vacancy Dashboard
+               {t('workforce.openDash')}
             </button>
          </div>
       </div>

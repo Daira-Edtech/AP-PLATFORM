@@ -12,6 +12,7 @@ import {
   ResponsiveContainer, Tooltip as RechartsTooltip,
   LineChart, Line
 } from 'recharts';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 interface DistrictComparisonProps {
   onDistrictSelect: (id: string) => void;
@@ -24,6 +25,7 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
     key: 'performance',
     direction: 'desc'
   });
+  const { t } = useLanguage();
 
   const { data: districts, loading } = useSupabaseQuery<DistrictSummary[]>(
     async () => {
@@ -124,7 +126,7 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
     return (
       <div className="flex items-center justify-center h-[400px] gap-3">
         <Loader2 className="animate-spin text-[#888]" size={24} />
-        <span className="text-[14px] text-[#888]">Loading district data...</span>
+        <span className="text-[14px] text-[#888]">{t('district.loadingData')}</span>
       </div>
     );
   }
@@ -134,8 +136,8 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-[28px] font-bold text-black tracking-tight mb-1">District Comparison</h1>
-          <p className="text-[14px] text-[#888888]">{districts?.length || 0} districts in Andhra Pradesh • All-District Performance Scorecard</p>
+          <h1 className="text-[28px] font-bold text-black tracking-tight mb-1">{t('district.title')}</h1>
+          <p className="text-[14px] text-[#888888]">{districts?.length || 0} {t('district.districtsIn')} • {t('district.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="bg-white border border-[#E5E5E5] rounded p-1 flex">
@@ -153,7 +155,7 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
             </button>
           </div>
           <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-            <Download size={16} /> Export CSV
+            <Download size={16} /> {t('district.exportCSV')}
           </button>
         </div>
       </div>
@@ -161,21 +163,21 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
       {/* HIGHLIGHT TOGGLES */}
       <div className="flex gap-3 mb-6">
         {[
-          { id: 'below-target', label: `Below Avg (${stateAvgCoverage}%)`, color: 'bg-amber-100 text-amber-900 border-amber-200' },
-          { id: 'high-escalations', label: 'Has Escalations', color: 'bg-red-100 text-red-900 border-red-200' },
-          { id: 'low-referral', label: 'Low Referral Completion', color: 'bg-orange-100 text-orange-900 border-orange-200' }
-        ].map(t => (
+          { id: 'below-target', label: `${t('district.belowAvg')} (${stateAvgCoverage}%)`, color: 'bg-amber-100 text-amber-900 border-amber-200' },
+          { id: 'high-escalations', label: t('district.hasEscalations'), color: 'bg-red-100 text-red-900 border-red-200' },
+          { id: 'low-referral', label: t('district.lowReferral'), color: 'bg-orange-100 text-orange-900 border-orange-200' }
+        ].map(tog => (
           <button
-            key={t.id}
-            onClick={() => toggleFilter(t.id)}
-            className={`px-4 py-2 rounded-full border text-[12px] font-bold transition-all ${activeToggles.includes(t.id) ? t.color : 'bg-white text-[#888] border-[#E5E5E5] hover:border-[#CCC]'
+            key={tog.id}
+            onClick={() => toggleFilter(tog.id)}
+            className={`px-4 py-2 rounded-full border text-[12px] font-bold transition-all ${activeToggles.includes(tog.id) ? tog.color : 'bg-white text-[#888] border-[#E5E5E5] hover:border-[#CCC]'
               }`}
           >
-            {t.label}
+            {tog.label}
           </button>
         ))}
         <button className="ml-auto text-[13px] font-bold text-[#888] flex items-center gap-2 hover:text-black transition-colors">
-          <Filter size={14} /> More Filters
+          <Filter size={14} /> {t('district.moreFilters')}
         </button>
       </div>
 
@@ -185,28 +187,28 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-black text-white text-[10px] uppercase font-bold tracking-widest">
-                  <th className="px-4 py-3 border-r border-[#333]">Rank</th>
-                  <th className="px-4 py-3 min-w-[140px] border-r border-[#333]">District</th>
-                  <th className="px-4 py-3 border-r border-[#333]">DPO Officer</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">CDPOs</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">Mandals</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">AWCs</th>
-                  <th className="px-4 py-3 text-right border-r border-[#333]">Children</th>
-                  <th className="px-4 py-3 text-right border-r border-[#333]">Screened</th>
+                  <th className="px-4 py-3 border-r border-[#333]">{t('table.rank')}</th>
+                  <th className="px-4 py-3 min-w-[140px] border-r border-[#333]">{t('table.district')}</th>
+                  <th className="px-4 py-3 border-r border-[#333]">{t('table.dpoOfficer')}</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.cdpos')}</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.mandals')}</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.awcs')}</th>
+                  <th className="px-4 py-3 text-right border-r border-[#333]">{t('table.children')}</th>
+                  <th className="px-4 py-3 text-right border-r border-[#333]">{t('table.screened')}</th>
                   <th className="px-4 py-3 min-w-[150px] border-r border-[#333]">
                     <div className="flex items-center justify-between">
-                      Coverage % <ArrowUpDown size={12} className="cursor-pointer" onClick={() => handleSort('coverage')} />
+                      {t('table.coveragePct')} <ArrowUpDown size={12} className="cursor-pointer" onClick={() => handleSort('coverage')} />
                     </div>
                   </th>
                   <th className="px-2 py-3 text-center border-r border-[#333] bg-[#22C55E]/10">L</th>
                   <th className="px-2 py-3 text-center border-r border-[#333] bg-[#F59E0B]/10">M</th>
                   <th className="px-2 py-3 text-center border-r border-[#333] bg-[#EF4444]/10">H</th>
                   <th className="px-2 py-3 text-center border-r border-[#333] bg-black/10">C</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">Escal.</th>
-                  <th className="px-4 py-3 min-w-[120px] border-r border-[#333]">Referrals (A/D)</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">Avg Wait</th>
-                  <th className="px-4 py-3 text-center border-r border-[#333]">Load %</th>
-                  <th className="px-4 py-3 text-center min-w-[100px]">Perf Score</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.escalations')}</th>
+                  <th className="px-4 py-3 min-w-[120px] border-r border-[#333]">{t('table.referralsAD')}</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.avgWait')}</th>
+                  <th className="px-4 py-3 text-center border-r border-[#333]">{t('table.loadPct')}</th>
+                  <th className="px-4 py-3 text-center min-w-[100px]">{t('table.perfScore')}</th>
                 </tr>
               </thead>
               <tbody className="text-[12px]">
@@ -282,7 +284,7 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-8">Multi-Factor Operational Radar</h3>
+            <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-8">{t('radar.title')}</h3>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
@@ -306,26 +308,26 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
           </div>
           <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm flex flex-col justify-between">
             <div>
-              <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-4">Radar Insight</h3>
+              <h3 className="text-[16px] font-bold text-black uppercase tracking-tight mb-4">{t('radar.insight')}</h3>
               <p className="text-[14px] text-[#555] leading-relaxed mb-6">
-                The radar chart evaluates districts across 5 mission-critical axes. Overlapping polygons highlight systemic operational gaps.
+                {t('radar.description')}
               </p>
               <div className="space-y-4">
                 {topPerformer && (
                   <div className="p-4 bg-[#F9F9F9] rounded border-l-4 border-black">
-                    <span className="text-[11px] font-bold text-[#888] uppercase block mb-1">Top Performer</span>
+                    <span className="text-[11px] font-bold text-[#888] uppercase block mb-1">{t('radar.topPerformer')}</span>
                     <span className="text-[15px] font-bold">{topPerformer.name}</span>
                     <p className="text-[12px] text-[#555] mt-1">
-                      Coverage: {topPerformer.coverage_pct}% • Performance Score: {topPerformer.performance}
+                      {t('radar.coverage')}: {topPerformer.coverage_pct}% • {t('radar.performanceScore')}: {topPerformer.performance}
                     </p>
                   </div>
                 )}
                 {priorityAttention && (
                   <div className="p-4 bg-[#F9F9F9] rounded border-l-4 border-red-500">
-                    <span className="text-[11px] font-bold text-[#888] uppercase block mb-1">Priority Attention</span>
+                    <span className="text-[11px] font-bold text-[#888] uppercase block mb-1">{t('radar.priorityAttention')}</span>
                     <span className="text-[15px] font-bold">{priorityAttention.name}</span>
                     <p className="text-[12px] text-[#555] mt-1">
-                      Lowest coverage at {priorityAttention.coverage_pct}% • {priorityAttention.risk_critical} critical risk cases
+                      {t('radar.lowestCoverage')} {priorityAttention.coverage_pct}% • {priorityAttention.risk_critical} {t('radar.criticalRiskCases')}
                     </p>
                   </div>
                 )}
@@ -333,10 +335,10 @@ const DistrictComparison: React.FC<DistrictComparisonProps> = ({ onDistrictSelec
             </div>
             <div className="flex gap-3 mt-8">
               <button className="flex-1 py-3 bg-black text-white font-bold rounded text-[13px] hover:bg-[#333] transition-colors flex items-center justify-center gap-2">
-                <Copy size={16} /> Copy for Presentation
+                <Copy size={16} /> {t('radar.copyPresentation')}
               </button>
               <button className="flex-1 py-3 border border-black font-bold rounded text-[13px] hover:bg-[#F9F9F9] transition-colors">
-                Export PDF
+                {t('radar.exportPDF')}
               </button>
             </div>
           </div>

@@ -1,7 +1,28 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import type { StateKPIs, RiskDistribution, Alert } from '@/lib/commissioner/types-db'
+import type { StateKPIs, RiskDistribution } from '@/lib/commissioner/types-db'
+
+// Cache AWC IDs per state for 60 seconds to avoid repeated expensive joins
+const awcCache = new Map<string, { ids: string[], timestamp: number }>()
+const CACHE_TTL = 60000 // 60 seconds
+
+async function getStateAwcIds(supabase: any, stateId: string): Promise<string[]> {
+    const cached = awcCache.get(stateId)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.ids
+    }
+
+    const { data: awcs } = await supabase
+        .from('awcs')
+        .select('id, mandals!inner(id, districts!inner(id))')
+        .eq('mandals.districts.state_id', stateId)
+        .eq('is_active', true)
+
+    const ids = (awcs || []).map((a: any) => a.id)
+    awcCache.set(stateId, { ids, timestamp: Date.now() })
+    return ids
+}
 
 export async function GET(request: Request) {
     try {
@@ -18,58 +39,160 @@ export async function GET(request: Request) {
 
         if (!stateId) return NextResponse.json({ error: 'Commissioner not assigned to a state' }, { status: 403 })
 
-        // Pre-fetch valid IDs for the state to filter queries
-        const { data: districts } = await supabase.from('districts').select('id').eq('state_id', stateId)
-        const districtIds = (districts || []).map(d => d.id)
+        // Use cached AWC IDs
+        const awcIds = await getStateAwcIds(supabase, stateId)
+        if (awcIds.length === 0) {
+            // Return empty/zero results immediately
+            if (endpoint === 'kpis') {
+                return NextResponse.json({ total_children: 0, screened: 0, coverage_pct: 0, high_risk: 0, critical_risk: 0, active_referrals: 0, open_flags: 0 })
+            }
+            if (endpoint === 'risk-distribution') {
+                return NextResponse.json({ total: 0, low: 0, medium: 0, high: 0, critical: 0, unscreened: 0 })
+            }
+            if (endpoint === 'alerts' || endpoint === 'historical-kpis') {
+                return NextResponse.json([])
+            }
+            if (endpoint === 'escalation-summary') {
+                return NextResponse.json({ total: 0, critical: 0, stateLevel: 0 })
+            }
+        }
 
-        const { data: mandals } = await supabase.from('mandals').select('id').in('district_id', districtIds.length ? districtIds : [stateId])
-        const mandalIds = (mandals || []).map(m => m.id)
+        // BATCH endpoint - fetches all critical data in ONE call
+        if (endpoint === 'batch') {
+            // Single query to get all children with their risk levels
+            const { data: children } = await supabase
+                .from('children')
+                .select('id, current_risk_level, last_screening_date')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
 
-        const { data: awcs } = await supabase.from('awcs').select('id').in('mandal_id', mandalIds.length ? mandalIds : [stateId]).eq('is_active', true)
-        const awcIds = (awcs || []).map(a => a.id)
-        const validAwcIds = awcIds.length ? awcIds : [stateId]
+            const childrenArr = children || []
+            const childIds = childrenArr.map(c => c.id)
+
+            // Aggregate in memory (much faster than multiple DB round-trips)
+            let total = 0, screened = 0, low = 0, medium = 0, high = 0, critical = 0
+            childrenArr.forEach(c => {
+                total++
+                if (c.last_screening_date) screened++
+                const risk = (c.current_risk_level || '').toLowerCase()
+                if (risk === 'low') low++
+                else if (risk === 'medium') medium++
+                else if (risk === 'high') high++
+                else if (risk === 'critical') critical++
+            })
+
+            // Fetch flags and referrals in parallel
+            let activeReferrals = 0, openFlags = 0, escalatedTotal = 0, escalatedCritical = 0, escalatedState = 0
+
+            if (childIds.length > 0) {
+                const [refRes, flagRes, escRes] = await Promise.all([
+                    supabase.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['generated', 'sent', 'scheduled']),
+                    supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['raised', 'acknowledged', 'in_progress']),
+                    supabase.from('flags').select('status, priority, escalated_to').in('child_id', childIds).eq('status', 'escalated')
+                ])
+                activeReferrals = refRes.count || 0
+                openFlags = flagRes.count || 0
+
+                // Aggregate escalations
+                const escData = escRes.data || []
+                escalatedTotal = escData.length
+                escalatedCritical = escData.filter((f: any) => f.priority === 'urgent').length
+                escalatedState = escData.filter((f: any) => f.escalated_to === 'state').length
+            }
+
+            return NextResponse.json({
+                kpis: {
+                    total_children: total,
+                    screened,
+                    coverage_pct: total > 0 ? Math.round((screened / total) * 1000) / 10 : 0,
+                    high_risk: high,
+                    critical_risk: critical,
+                    active_referrals: activeReferrals,
+                    open_flags: openFlags,
+                },
+                riskDistribution: {
+                    total: screened,
+                    low,
+                    medium,
+                    high,
+                    critical,
+                    unscreened: total - screened,
+                },
+                escalationSummary: {
+                    total: escalatedTotal,
+                    critical: escalatedCritical,
+                    stateLevel: escalatedState,
+                }
+            })
+        }
 
         if (endpoint === 'kpis') {
-            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
-            const childIds = (children || []).map(c => c.id)
-            const validChildIds = childIds.length ? childIds : [stateId]
+            // Single query approach - fetch all children and aggregate in memory
+            const { data: children } = await supabase
+                .from('children')
+                .select('id, current_risk_level, last_screening_date')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
 
-            const { count: totalChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true)
-            const { count: screened } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-            const { count: highRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'high')
-            const { count: criticalRisk } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'critical')
-            const { count: activeReferrals } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).in('status', ['generated', 'sent', 'scheduled'])
-            const { count: openFlags } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).in('status', ['raised', 'acknowledged', 'in_progress'])
+            const childrenArr = children || []
+            const childIds = childrenArr.map(c => c.id)
 
-            const total = totalChildren || 0
-            const scr = screened || 0
+            let total = 0, screened = 0, high = 0, critical = 0
+            childrenArr.forEach(c => {
+                total++
+                if (c.last_screening_date) screened++
+                const risk = (c.current_risk_level || '').toLowerCase()
+                if (risk === 'high') high++
+                else if (risk === 'critical') critical++
+            })
+
+            let activeReferrals = 0, openFlags = 0
+            if (childIds.length > 0) {
+                const [refRes, flagRes] = await Promise.all([
+                    supabase.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['generated', 'sent', 'scheduled']),
+                    supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['raised', 'acknowledged', 'in_progress'])
+                ])
+                activeReferrals = refRes.count || 0
+                openFlags = flagRes.count || 0
+            }
+
             const result: StateKPIs = {
                 total_children: total,
-                screened: scr,
-                coverage_pct: total > 0 ? Math.round((scr / total) * 1000) / 10 : 0,
-                high_risk: highRisk || 0,
-                critical_risk: criticalRisk || 0,
-                active_referrals: activeReferrals || 0,
-                open_flags: openFlags || 0,
+                screened,
+                coverage_pct: total > 0 ? Math.round((screened / total) * 1000) / 10 : 0,
+                high_risk: high,
+                critical_risk: critical,
+                active_referrals: activeReferrals,
+                open_flags: openFlags,
             }
             return NextResponse.json(result)
         }
 
         if (endpoint === 'risk-distribution') {
-            const { count: total } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-            const { count: low } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'low')
-            const { count: medium } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'medium')
-            const { count: high } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'high')
-            const { count: critical } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true).eq('current_risk_level', 'critical')
-            const { count: allChildren } = await supabase.from('children').select('*', { count: 'exact', head: true }).in('awc_id', validAwcIds).eq('is_active', true)
+            const { data: children } = await supabase
+                .from('children')
+                .select('current_risk_level, last_screening_date')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
+
+            let total = 0, screened = 0, low = 0, medium = 0, high = 0, critical = 0
+            ;(children || []).forEach((c: any) => {
+                total++
+                if (c.last_screening_date) screened++
+                const risk = (c.current_risk_level || '').toLowerCase()
+                if (risk === 'low') low++
+                else if (risk === 'medium') medium++
+                else if (risk === 'high') high++
+                else if (risk === 'critical') critical++
+            })
 
             const result: RiskDistribution = {
-                total: total || 0,
-                low: low || 0,
-                medium: medium || 0,
-                high: high || 0,
-                critical: critical || 0,
-                unscreened: (allChildren || 0) - (total || 0),
+                total: screened,
+                low,
+                medium,
+                high,
+                critical,
+                unscreened: total - screened,
             }
             return NextResponse.json(result)
         }
@@ -78,17 +201,23 @@ export async function GET(request: Request) {
             const limitParam = searchParams.get('limit')
             const limit = limitParam ? parseInt(limitParam) : 10
 
-            // For alerts, either targeted directly to user or to children in the state
-            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
-            const childIds = (children || []).map(c => c.id)
-            const validChildIds = childIds.length ? childIds : [stateId]
+            // Get child IDs first
+            const { data: children } = await supabase
+                .from('children')
+                .select('id')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
+                .limit(10000) // Limit to avoid huge queries
+
+            const childIds = (children || []).map((c: any) => c.id)
+            if (childIds.length === 0) return NextResponse.json([])
 
             const { data, error } = await supabase
                 .from('alerts')
                 .select('*')
                 .in('severity', ['critical', 'high'])
                 .eq('is_read', false)
-                .in('related_child_id', validChildIds)
+                .in('related_child_id', childIds)
                 .order('created_at', { ascending: false })
                 .limit(limit)
 
@@ -97,20 +226,41 @@ export async function GET(request: Request) {
         }
 
         if (endpoint === 'escalation-summary') {
-            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
-            const childIds = (children || []).map(c => c.id)
-            const validChildIds = childIds.length ? childIds : [stateId]
+            const { data: children } = await supabase
+                .from('children')
+                .select('id')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
 
-            const { count: total } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('status', 'escalated')
-            const { count: critical } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('status', 'escalated').eq('priority', 'urgent')
-            const { count: stateLevel } = await supabase.from('flags').select('*', { count: 'exact', head: true }).in('child_id', validChildIds).eq('escalated_to', 'state')
+            const childIds = (children || []).map((c: any) => c.id)
+            if (childIds.length === 0) {
+                return NextResponse.json({ total: 0, critical: 0, stateLevel: 0 })
+            }
 
-            return NextResponse.json({ total: total || 0, critical: critical || 0, stateLevel: stateLevel || 0 })
+            // Single query to get all escalated flags, then aggregate
+            const { data: flags } = await supabase
+                .from('flags')
+                .select('priority, escalated_to')
+                .in('child_id', childIds)
+                .eq('status', 'escalated')
+
+            const flagsArr = flags || []
+            return NextResponse.json({
+                total: flagsArr.length,
+                critical: flagsArr.filter((f: any) => f.priority === 'urgent').length,
+                stateLevel: flagsArr.filter((f: any) => f.escalated_to === 'state').length
+            })
         }
 
         if (endpoint === 'historical-kpis') {
-            // Try kpi_cache filtered by this exact state_id
-            const { data: cached } = await supabase.from('kpi_cache').select('period, metrics').eq('level', 'state').eq('entity_id', stateId).order('period', { ascending: true })
+            // Try cache first
+            const { data: cached } = await supabase
+                .from('kpi_cache')
+                .select('period, metrics')
+                .eq('level', 'state')
+                .eq('entity_id', stateId)
+                .order('period', { ascending: true })
+
             if (cached && cached.length > 0) {
                 return NextResponse.json(cached.map((row: any) => ({
                     name: row.period,
@@ -119,22 +269,41 @@ export async function GET(request: Request) {
                 })))
             }
 
-            const { data: children } = await supabase.from('children').select('id').in('awc_id', validAwcIds).eq('is_active', true)
-            const childIds = (children || []).map(c => c.id)
-            const validChildIds = childIds.length ? childIds : [stateId]
+            // Fallback: compute from assessments (limit to last 12 months for speed)
+            const oneYearAgo = new Date()
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
 
-            // Fallback: assessments
-            const { data: assessments } = await supabase.from('assessments').select('assessed_at').in('child_id', validChildIds).order('assessed_at', { ascending: true })
+            const { data: children } = await supabase
+                .from('children')
+                .select('id')
+                .in('awc_id', awcIds)
+                .eq('is_active', true)
+                .limit(50000)
+
+            const childIds = (children || []).map((c: any) => c.id)
+            if (childIds.length === 0) return NextResponse.json([])
+
+            const { data: assessments } = await supabase
+                .from('assessments')
+                .select('assessed_at')
+                .in('child_id', childIds)
+                .gte('assessed_at', oneYearAgo.toISOString())
+                .order('assessed_at', { ascending: true })
+                .limit(100000)
+
             if (!assessments || assessments.length === 0) return NextResponse.json([])
+
             const monthMap: Record<string, number> = {}
             assessments.forEach((a: any) => {
                 const d = new Date(a.assessed_at)
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
                 monthMap[key] = (monthMap[key] || 0) + 1
             })
+
             const months = Object.keys(monthMap).sort()
             let cumulative = 0
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
             return NextResponse.json(months.map(m => {
                 cumulative += monthMap[m]
                 const [year, month] = m.split('-')

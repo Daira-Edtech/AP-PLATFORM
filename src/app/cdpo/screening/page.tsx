@@ -1,6 +1,8 @@
 import CdpoScreening from '@/components/cdpo/CdpoScreening';
 import { getScreeningMatrixData, getCdpoDashboardData } from '@/lib/cdpo/actions';
 
+export const dynamic = 'force-dynamic';
+
 export default async function CdpoScreeningPage() {
     const [screeningData, dashboardData] = await Promise.all([
         getScreeningMatrixData(),

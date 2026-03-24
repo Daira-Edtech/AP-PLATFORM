@@ -2,8 +2,21 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
-// Helper to get the commissioner's state-scoped IDs
-async function getStateScope(adminSb: ReturnType<typeof createAdminClient>) {
+// Cache for state scope data
+const scopeCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL = 60000
+
+interface StateScope {
+    stateId: string
+    districts: { id: string; name: string }[]
+    districtIds: string[]
+    mandalIds: string[]
+    awcIds: string[]
+    // Mapping for efficient district lookups
+    awcToDistrict: Map<string, string>
+}
+
+async function getStateScope(adminSb: ReturnType<typeof createAdminClient>): Promise<StateScope | null> {
     const userSb = await createClient()
     const { data: { user } } = await userSb.auth.getUser()
     if (!user) return null
@@ -13,19 +26,46 @@ async function getStateScope(adminSb: ReturnType<typeof createAdminClient>) {
 
     const stateId = profile.state_id
 
-    // Get districts in state
+    // Check cache
+    const cached = scopeCache.get(stateId)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.data
+    }
+
+    // Fetch all scope data
     const { data: districts } = await adminSb.from('districts').select('id, name').eq('state_id', stateId)
     const districtIds = districts?.map(d => d.id) || []
 
-    // Get mandals in those districts
-    const { data: mandals } = await adminSb.from('mandals').select('id').in('district_id', districtIds)
+    if (districtIds.length === 0) {
+        const emptyScope: StateScope = { stateId, districts: [], districtIds: [], mandalIds: [], awcIds: [], awcToDistrict: new Map() }
+        scopeCache.set(stateId, { data: emptyScope, timestamp: Date.now() })
+        return emptyScope
+    }
+
+    const { data: mandals } = await adminSb.from('mandals').select('id, district_id').in('district_id', districtIds)
     const mandalIds = mandals?.map(m => m.id) || []
 
-    // Get AWCs in those mandals
-    const { data: awcs } = await adminSb.from('awcs').select('id').in('mandal_id', mandalIds)
+    if (mandalIds.length === 0) {
+        const emptyScope: StateScope = { stateId, districts: districts || [], districtIds, mandalIds: [], awcIds: [], awcToDistrict: new Map() }
+        scopeCache.set(stateId, { data: emptyScope, timestamp: Date.now() })
+        return emptyScope
+    }
+
+    const mandalToDistrict = new Map((mandals || []).map(m => [m.id, m.district_id]))
+
+    const { data: awcs } = await adminSb.from('awcs').select('id, mandal_id').in('mandal_id', mandalIds).eq('is_active', true)
     const awcIds = awcs?.map(a => a.id) || []
 
-    return { stateId, districts: districts || [], districtIds, mandalIds, awcIds }
+    // Build AWC → District mapping for efficient lookups
+    const awcToDistrict = new Map<string, string>()
+    ;(awcs || []).forEach(a => {
+        const distId = mandalToDistrict.get(a.mandal_id)
+        if (distId) awcToDistrict.set(a.id, distId)
+    })
+
+    const scope: StateScope = { stateId, districts: districts || [], districtIds, mandalIds, awcIds, awcToDistrict }
+    scopeCache.set(stateId, { data: scope, timestamp: Date.now() })
+    return scope
 }
 
 export async function GET(request: Request) {
@@ -39,74 +79,85 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized or no state assigned' }, { status: 401 })
         }
 
-        const { districts, districtIds, awcIds } = scope
+        const { districts, awcIds, awcToDistrict, mandalIds } = scope
+
+        if (awcIds.length === 0) {
+            // Return empty results immediately based on type
+            switch (type) {
+                case 'coverage-kpis': return NextResponse.json({ total: 0, screened: 0, unscreened: 0, rate: 0 })
+                case 'district-coverage': return NextResponse.json(districts.map(d => ({ id: d.id, name: d.name, total: 0, screened: 0, coverage: 0 })))
+                case 'age-bands': return NextResponse.json([])
+                case 'coverage-trends': return NextResponse.json({ months: [], districtNames: [] })
+                case 'risk-kpis': return NextResponse.json({ high: 0, critical: 0, medium: 0, normal: 0 })
+                case 'risk-by-district': return NextResponse.json(districts.map(d => ({ name: d.name, Low: 0, Medium: 0, High: 0, Critical: 0 })))
+                case 'conditions': return NextResponse.json({ conditions: [], total: 0 })
+                case 'condition-heatmap': return NextResponse.json({ heatmap: [], districts: [], categories: [] })
+                case 'condition-trends': return NextResponse.json([])
+                default: return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 })
+            }
+        }
 
         switch (type) {
-            // ═══════════════════════════════════════════════════════
-            // COVERAGE TAB
-            // ═══════════════════════════════════════════════════════
             case 'coverage-kpis': {
-                if (awcIds.length === 0) {
-                    return NextResponse.json({ total: 0, screened: 0, unscreened: 0, rate: 0 })
-                }
+                // Single query + memory aggregation
+                const { data: children } = await adminSb
+                    .from('children')
+                    .select('last_screening_date')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                const { count: total } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true)
+                let total = 0, screened = 0
+                ;(children || []).forEach(c => {
+                    total++
+                    if (c.last_screening_date) screened++
+                })
 
-                const { count: screened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-
-                const t = total || 0
-                const s = screened || 0
                 return NextResponse.json({
-                    total: t,
-                    screened: s,
-                    unscreened: t - s,
-                    rate: t > 0 ? Math.round((s / t) * 1000) / 10 : 0
+                    total,
+                    screened,
+                    unscreened: total - screened,
+                    rate: total > 0 ? Math.round((screened / total) * 1000) / 10 : 0
                 })
             }
 
             case 'district-coverage': {
-                // For each district, get AWC IDs, then count children/screened
-                const result = await Promise.all(districts.map(async (dist) => {
-                    const { data: dMandals } = await adminSb.from('mandals').select('id').eq('district_id', dist.id)
-                    const dMandalIds = dMandals?.map(m => m.id) || []
-                    if (dMandalIds.length === 0) return { id: dist.id, name: dist.name, total: 0, screened: 0, coverage: 0 }
+                // OPTIMIZED: Single query, then aggregate by district in memory
+                const { data: children } = await adminSb
+                    .from('children')
+                    .select('awc_id, last_screening_date')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                    const { data: dAwcs } = await adminSb.from('awcs').select('id').in('mandal_id', dMandalIds)
-                    const dAwcIds = dAwcs?.map(a => a.id) || []
-                    if (dAwcIds.length === 0) return { id: dist.id, name: dist.name, total: 0, screened: 0, coverage: 0 }
+                // Initialize district counters
+                const distData: Record<string, { total: number; screened: number }> = {}
+                districts.forEach(d => { distData[d.id] = { total: 0, screened: 0 } })
 
-                    const { count: dTotal } = await adminSb
-                        .from('children').select('*', { count: 'exact', head: true })
-                        .in('awc_id', dAwcIds).eq('is_active', true)
-
-                    const { count: dScreened } = await adminSb
-                        .from('children').select('*', { count: 'exact', head: true })
-                        .in('awc_id', dAwcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-
-                    const t = dTotal || 0
-                    const s = dScreened || 0
-                    return {
-                        id: dist.id,
-                        name: dist.name,
-                        total: t,
-                        screened: s,
-                        coverage: t > 0 ? Math.round((s / t) * 1000) / 10 : 0
+                // Aggregate
+                ;(children || []).forEach(c => {
+                    const distId = awcToDistrict.get(c.awc_id)
+                    if (distId && distData[distId]) {
+                        distData[distId].total++
+                        if (c.last_screening_date) distData[distId].screened++
                     }
-                }))
+                })
 
-                return NextResponse.json(result)
+                return NextResponse.json(districts.map(d => ({
+                    id: d.id,
+                    name: d.name,
+                    total: distData[d.id].total,
+                    screened: distData[d.id].screened,
+                    coverage: distData[d.id].total > 0
+                        ? Math.round((distData[d.id].screened / distData[d.id].total) * 1000) / 10
+                        : 0
+                })))
             }
 
             case 'age-bands': {
-                if (awcIds.length === 0) return NextResponse.json([])
-
                 const { data: children } = await adminSb
-                    .from('children').select('dob, last_screening_date')
-                    .in('awc_id', awcIds).eq('is_active', true)
+                    .from('children')
+                    .select('dob, last_screening_date')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
                 const bands = [
                     { band: '0-1 yr', min: 0, max: 12, screened: 0, unscreened: 0 },
@@ -118,7 +169,8 @@ export async function GET(request: Request) {
                 ]
 
                 const now = new Date()
-                children?.forEach(c => {
+                ;(children || []).forEach(c => {
+                    if (!c.dob) return
                     const dob = new Date(c.dob)
                     const ageMonths = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth())
                     const band = bands.find(b => ageMonths >= b.min && ageMonths < b.max)
@@ -132,20 +184,13 @@ export async function GET(request: Request) {
             }
 
             case 'coverage-trends': {
-                if (awcIds.length === 0) return NextResponse.json([])
-
                 const { data: children } = await adminSb
                     .from('children')
                     .select('last_screening_date, awc_id')
-                    .in('awc_id', awcIds).eq('is_active', true)
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
                     .not('last_screening_date', 'is', null)
 
-                // Build AWC → district mapping
-                const { data: awcList } = await adminSb.from('awcs').select('id, mandal_id').in('id', awcIds)
-                const { data: mandalList } = await adminSb.from('mandals').select('id, district_id').in('id', scope.mandalIds)
-
-                const awcToMandal = new Map(awcList?.map(a => [a.id, a.mandal_id]) || [])
-                const mandalToDistrict = new Map(mandalList?.map(m => [m.id, m.district_id]) || [])
                 const districtNames = new Map(districts.map(d => [d.id, d.name]))
 
                 // Generate last 12 months
@@ -156,7 +201,6 @@ export async function GET(request: Request) {
                     months.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }))
                 }
 
-                // Count screenings per month per district
                 const data = months.map(month => {
                     const entry: Record<string, any> = { month }
                     districts.forEach(d => { entry[d.name] = 0 })
@@ -164,16 +208,15 @@ export async function GET(request: Request) {
                     return entry
                 })
 
-                children?.forEach(c => {
+                ;(children || []).forEach(c => {
                     if (!c.last_screening_date) return
                     const sd = new Date(c.last_screening_date)
                     const monthLabel = sd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
                     const dataPoint = data.find(d => d.month === monthLabel)
                     if (!dataPoint) return
 
-                    const mandalId = awcToMandal.get(c.awc_id)
-                    const districtId = mandalId ? mandalToDistrict.get(mandalId) : null
-                    const distName = districtId ? districtNames.get(districtId) : null
+                    const distId = awcToDistrict.get(c.awc_id)
+                    const distName = distId ? districtNames.get(distId) : null
                     if (distName && dataPoint[distName] !== undefined) {
                         dataPoint[distName]++
                     }
@@ -181,109 +224,91 @@ export async function GET(request: Request) {
 
                 // Compute state avg
                 data.forEach(entry => {
-                    let sum = 0, count = 0
-                    districts.forEach(d => {
-                        sum += entry[d.name] || 0
-                        count++
-                    })
-                    entry['State Avg'] = count > 0 ? Math.round(sum / count) : 0
+                    let sum = 0
+                    districts.forEach(d => { sum += entry[d.name] || 0 })
+                    entry['State Avg'] = districts.length > 0 ? Math.round(sum / districts.length) : 0
                 })
 
                 return NextResponse.json({ months: data, districtNames: districts.map(d => d.name) })
             }
 
-            // ═══════════════════════════════════════════════════════
-            // RISK DISTRIBUTION TAB
-            // ═══════════════════════════════════════════════════════
             case 'risk-kpis': {
-                if (awcIds.length === 0) {
-                    return NextResponse.json({ high: 0, critical: 0, medium: 0, normal: 0 })
-                }
+                // Single query + aggregation
+                const { data: children } = await adminSb
+                    .from('children')
+                    .select('id, current_risk_level')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                const [highRes, medRes, normalRes, critRes] = await Promise.all([
-                    adminSb.from('children').select('*', { count: 'exact', head: true })
-                        .in('awc_id', awcIds).eq('is_active', true).eq('current_risk_level', 'high'),
-                    adminSb.from('children').select('*', { count: 'exact', head: true })
-                        .in('awc_id', awcIds).eq('is_active', true).eq('current_risk_level', 'medium'),
-                    adminSb.from('children').select('*', { count: 'exact', head: true })
-                        .in('awc_id', awcIds).eq('is_active', true)
-                        .or('current_risk_level.is.null,current_risk_level.eq.normal'),
-                    adminSb.from('flags').select('*', { count: 'exact', head: true })
-                        .eq('priority', 'critical').eq('status', 'raised')
-                ])
+                let high = 0, medium = 0, normal = 0
+                const childIds: string[] = []
 
-                // For critical flags, filter by child's AWC
-                const { data: critFlags } = await adminSb
-                    .from('flags').select('child_id')
-                    .eq('priority', 'critical')
-
-                let critCount = 0
-                if (critFlags) {
-                    const critChildIds = critFlags.map(f => f.child_id)
-                    if (critChildIds.length > 0) {
-                        const { data: critChildren } = await adminSb
-                            .from('children').select('id')
-                            .in('id', critChildIds).in('awc_id', awcIds)
-                        critCount = critChildren?.length || 0
+                ;(children || []).forEach(c => {
+                    childIds.push(c.id)
+                    switch (c.current_risk_level) {
+                        case 'high': high++; break
+                        case 'medium': medium++; break
+                        default: normal++
                     }
+                })
+
+                // Count critical flags for these children
+                let critical = 0
+                if (childIds.length > 0) {
+                    const { count } = await adminSb
+                        .from('flags')
+                        .select('*', { count: 'exact', head: true })
+                        .in('child_id', childIds)
+                        .eq('priority', 'critical')
+                    critical = count || 0
                 }
 
-                return NextResponse.json({
-                    high: highRes.count || 0,
-                    medium: medRes.count || 0,
-                    normal: normalRes.count || 0,
-                    critical: critCount
-                })
+                return NextResponse.json({ high, medium, normal, critical })
             }
 
             case 'risk-by-district': {
-                const result = await Promise.all(districts.map(async (dist) => {
-                    const { data: dMandals } = await adminSb.from('mandals').select('id').eq('district_id', dist.id)
-                    const dMandalIds = dMandals?.map(m => m.id) || []
-                    if (dMandalIds.length === 0) return { name: dist.name, Low: 0, Medium: 0, High: 0, Critical: 0 }
+                // OPTIMIZED: Single query, then aggregate by district
+                const { data: children } = await adminSb
+                    .from('children')
+                    .select('awc_id, current_risk_level')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                    const { data: dAwcs } = await adminSb.from('awcs').select('id').in('mandal_id', dMandalIds)
-                    const dAwcIds = dAwcs?.map(a => a.id) || []
-                    if (dAwcIds.length === 0) return { name: dist.name, Low: 0, Medium: 0, High: 0, Critical: 0 }
+                const distData: Record<string, { Low: number; Medium: number; High: number; Critical: number }> = {}
+                districts.forEach(d => { distData[d.id] = { Low: 0, Medium: 0, High: 0, Critical: 0 } })
 
-                    const { data: dChildren } = await adminSb
-                        .from('children').select('current_risk_level')
-                        .in('awc_id', dAwcIds).eq('is_active', true)
+                ;(children || []).forEach(c => {
+                    const distId = awcToDistrict.get(c.awc_id)
+                    if (!distId || !distData[distId]) return
 
-                    let low = 0, med = 0, high = 0, crit = 0
-                    dChildren?.forEach(c => {
-                        switch (c.current_risk_level) {
-                            case 'high': high++; break
-                            case 'medium': med++; break
-                            case 'critical': crit++; break
-                            default: low++
-                        }
-                    })
+                    switch (c.current_risk_level) {
+                        case 'high': distData[distId].High++; break
+                        case 'medium': distData[distId].Medium++; break
+                        case 'critical': distData[distId].Critical++; break
+                        default: distData[distId].Low++
+                    }
+                })
 
-                    return { name: dist.name, Low: low, Medium: med, High: high, Critical: crit }
-                }))
-
-                return NextResponse.json(result)
+                return NextResponse.json(districts.map(d => ({ name: d.name, ...distData[d.id] })))
             }
 
-            // ═══════════════════════════════════════════════════════
-            // CONDITIONS TAB
-            // ═══════════════════════════════════════════════════════
             case 'conditions': {
-                // Get all child IDs in state
                 const { data: stateChildren } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds).eq('is_active', true)
-                const childIds = stateChildren?.map(c => c.id) || []
+                    .from('children')
+                    .select('id')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
+                const childIds = (stateChildren || []).map(c => c.id)
                 if (childIds.length === 0) return NextResponse.json({ conditions: [], total: 0 })
 
                 const { data: flags } = await adminSb
-                    .from('flags').select('category')
+                    .from('flags')
+                    .select('category')
                     .in('child_id', childIds)
 
                 const counts: Record<string, number> = {}
-                flags?.forEach(f => {
+                ;(flags || []).forEach(f => {
                     const cat = f.category || 'other'
                     counts[cat] = (counts[cat] || 0) + 1
                 })
@@ -293,7 +318,7 @@ export async function GET(request: Request) {
                     .map(([condition, count]) => ({
                         condition: condition.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                         count,
-                        rate: Math.round((count / total) * 10000) / 10 // per 1000
+                        rate: Math.round((count / total) * 10000) / 10
                     }))
                     .sort((a, b) => b.count - a.count)
 
@@ -301,37 +326,33 @@ export async function GET(request: Request) {
             }
 
             case 'condition-heatmap': {
-                // Category × District cross-tab
                 const { data: stateChildren } = await adminSb
-                    .from('children').select('id, awc_id')
-                    .in('awc_id', awcIds).eq('is_active', true)
+                    .from('children')
+                    .select('id, awc_id')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                const childIds = stateChildren?.map(c => c.id) || []
-                if (childIds.length === 0) return NextResponse.json({ heatmap: [], districts: [], categories: [] })
+                const childIds = (stateChildren || []).map(c => c.id)
+                if (childIds.length === 0) return NextResponse.json({ heatmap: {}, districts: [], categories: [] })
 
-                const { data: flags } = await adminSb
-                    .from('flags').select('category, child_id')
-                    .in('child_id', childIds)
-
-                // Build child → AWC → mandal → district mapping
-                const childToAwc = new Map(stateChildren?.map(c => [c.id, c.awc_id]) || [])
-                const { data: awcList } = await adminSb.from('awcs').select('id, mandal_id').in('id', awcIds)
-                const { data: mandalList } = await adminSb.from('mandals').select('id, district_id').in('id', scope.mandalIds)
-                const awcToMandal = new Map(awcList?.map(a => [a.id, a.mandal_id]) || [])
-                const mandalToDistrict = new Map(mandalList?.map(m => [m.id, m.district_id]) || [])
+                const childToAwc = new Map((stateChildren || []).map(c => [c.id, c.awc_id]))
                 const districtNameMap = new Map(districts.map(d => [d.id, d.name]))
 
-                const categories = [...new Set(flags?.map(f => f.category || 'other') || [])]
+                const { data: flags } = await adminSb
+                    .from('flags')
+                    .select('category, child_id')
+                    .in('child_id', childIds)
 
-                // Build cross-tab: { category: { districtName: count } }
+                const categories = [...new Set((flags || []).map(f => f.category || 'other'))]
+
+                // Build cross-tab
                 const heatmap: Record<string, Record<string, number>> = {}
                 categories.forEach(cat => { heatmap[cat] = {} })
 
-                flags?.forEach(f => {
+                ;(flags || []).forEach(f => {
                     const cat = f.category || 'other'
                     const awcId = childToAwc.get(f.child_id)
-                    const mandalId = awcId ? awcToMandal.get(awcId) : null
-                    const distId = mandalId ? mandalToDistrict.get(mandalId) : null
+                    const distId = awcId ? awcToDistrict.get(awcId) : null
                     const distName = distId ? districtNameMap.get(distId) : null
                     if (distName) {
                         heatmap[cat][distName] = (heatmap[cat][distName] || 0) + 1
@@ -347,20 +368,23 @@ export async function GET(request: Request) {
 
             case 'condition-trends': {
                 const { data: stateChildren } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds).eq('is_active', true)
-                const childIds = stateChildren?.map(c => c.id) || []
-                if (childIds.length === 0) return NextResponse.json([])
+                    .from('children')
+                    .select('id')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
+
+                const childIds = (stateChildren || []).map(c => c.id)
+                if (childIds.length === 0) return NextResponse.json({ data: [], categories: [] })
 
                 const sixMonthsAgo = new Date()
                 sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
                 const { data: flags } = await adminSb
-                    .from('flags').select('category, created_at')
+                    .from('flags')
+                    .select('category, created_at')
                     .in('child_id', childIds)
                     .gte('created_at', sixMonthsAgo.toISOString())
 
-                // Group by month
                 const months: string[] = []
                 const now = new Date()
                 for (let i = 5; i >= 0; i--) {
@@ -368,14 +392,16 @@ export async function GET(request: Request) {
                     months.push(d.toLocaleDateString('en-US', { month: 'short' }))
                 }
 
-                const categories = [...new Set(flags?.map(f => f.category || 'other') || [])]
+                const categories = [...new Set((flags || []).map(f => f.category || 'other'))]
                 const data = months.map(month => {
                     const entry: Record<string, any> = { name: month }
-                    categories.forEach(c => { entry[c.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())] = 0 })
+                    categories.forEach(c => {
+                        entry[c.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())] = 0
+                    })
                     return entry
                 })
 
-                flags?.forEach(f => {
+                ;(flags || []).forEach(f => {
                     const d = new Date(f.created_at)
                     const monthLabel = d.toLocaleDateString('en-US', { month: 'short' })
                     const point = data.find(p => p.name === monthLabel)

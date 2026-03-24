@@ -55,59 +55,40 @@ export async function GET(request: Request) {
                     })
                 }
 
-                // Total children
-                const { count: totalChildren } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true)
+                // Parallelize initial counts
+                const [totalChildrenRes, screenedRes, riskChildrenRes, allChildrenRes] = await Promise.all([
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).eq('is_active', true),
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null),
+                    adminSb.from('children').select('id').in('awc_id', awcIds).eq('is_active', true).in('current_risk_level', ['high', 'critical']),
+                    adminSb.from('children').select('id').in('awc_id', awcIds).eq('is_active', true)
+                ])
 
-                // Screened
-                const { count: screened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-
-                // High/Critical risk children
-                const { data: riskChildren } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds).eq('is_active', true)
-                    .in('current_risk_level', ['high', 'critical'])
-                const riskCount = riskChildren?.length || 0
-
-                // Get all child IDs in state for referral/intervention lookups
-                const { data: allChildren } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds)
-                const childIds = allChildren?.map((c: any) => c.id) || []
+                const totalChildren = totalChildrenRes.count || 0
+                const screened = screenedRes.count || 0
+                const riskCount = riskChildrenRes.data?.length || 0
+                const childIds = allChildrenRes.data?.map((c: any) => c.id) || []
 
                 let referred = 0, intervened = 0, completedReferrals = 0, totalReferrals = 0, avgDays = 0
+                
                 if (childIds.length > 0) {
-                    const { count: refCount } = await adminSb
-                        .from('referrals').select('*', { count: 'exact', head: true })
-                        .in('child_id', childIds)
-                    totalReferrals = refCount || 0
+                    // Parallelize referral and intervention counts
+                    const [refCountReq, completedRefReq, intCountReq, refDatesReq, intDatesReq] = await Promise.all([
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds),
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'completed'),
+                        adminSb.from('interventions').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['in_progress', 'completed']),
+                        adminSb.from('referrals').select('child_id, created_at').in('child_id', childIds).eq('status', 'completed'),
+                        adminSb.from('interventions').select('child_id, created_at').in('child_id', childIds)
+                    ])
+
+                    totalReferrals = refCountReq.count || 0
                     referred = totalReferrals
+                    completedReferrals = completedRefReq.count || 0
+                    intervened = intCountReq.count || 0
 
-                    const { count: completedRef } = await adminSb
-                        .from('referrals').select('*', { count: 'exact', head: true })
-                        .in('child_id', childIds).eq('status', 'completed')
-                    completedReferrals = completedRef || 0
-
-                    const { count: intCount } = await adminSb
-                        .from('interventions').select('*', { count: 'exact', head: true })
-                        .in('child_id', childIds).in('status', ['in_progress', 'completed'])
-                    intervened = intCount || 0
-
-                    // Average time to intervention
-                    const { data: refDates } = await adminSb
-                        .from('referrals').select('child_id, created_at')
-                        .in('child_id', childIds).eq('status', 'completed')
-                    const { data: intDates } = await adminSb
-                        .from('interventions').select('child_id, created_at')
-                        .in('child_id', childIds)
-
-                    if (refDates?.length && intDates?.length) {
-                        const intMap = new Map(intDates.map((i: any) => [i.child_id, new Date(i.created_at).getTime()]))
+                    if (refDatesReq.data?.length && intDatesReq.data?.length) {
+                        const intMap = new Map(intDatesReq.data.map((i: any) => [i.child_id, new Date(i.created_at).getTime()]))
                         let totalDiff = 0, count = 0
-                        refDates.forEach((r: any) => {
+                        refDatesReq.data.forEach((r: any) => {
                             const intTime = intMap.get(r.child_id)
                             if (intTime) {
                                 totalDiff += (intTime - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24)
@@ -119,29 +100,23 @@ export async function GET(request: Request) {
                 }
 
                 const completionRate = totalReferrals > 0 ? Math.round((completedReferrals / totalReferrals) * 100) : 0
-                const total = totalChildren || 0
-                const currentRate = total > 0 ? Math.round((riskCount / total) * 10000) / 10 : 0
+                const currentRate = totalChildren > 0 ? Math.round((riskCount / totalChildren) * 10000) / 10 : 0
                 const improvement = BASELINE.identificationRate > 0
                     ? Math.round(((currentRate - BASELINE.identificationRate) / BASELINE.identificationRate) * 100)
                     : 0
 
-                // YoY screening growth
+                // YoY screening growth - parallelize these too
                 const now = new Date()
                 const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
                 const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate())
 
-                const { count: thisYearScreened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).gte('last_screening_date', oneYearAgo.toISOString().split('T')[0])
+                const [thisYearRes, lastYearRes] = await Promise.all([
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).gte('last_screening_date', oneYearAgo.toISOString().split('T')[0]),
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).gte('last_screening_date', twoYearsAgo.toISOString().split('T')[0]).lt('last_screening_date', oneYearAgo.toISOString().split('T')[0])
+                ])
 
-                const { count: lastYearScreened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds)
-                    .gte('last_screening_date', twoYearsAgo.toISOString().split('T')[0])
-                    .lt('last_screening_date', oneYearAgo.toISOString().split('T')[0])
-
-                const thisY = thisYearScreened || 0
-                const lastY = lastYearScreened || 0
+                const thisY = thisYearRes.count || 0
+                const lastY = lastYearRes.count || 0
                 const yoyGrowth = lastY > 0 ? Math.round(((thisY - lastY) / lastY) * 100) : (thisY > 0 ? 100 : 0)
 
                 return NextResponse.json({
@@ -194,49 +169,39 @@ export async function GET(request: Request) {
             case 'pipeline': {
                 if (awcIds.length === 0) return NextResponse.json([])
 
-                const { count: screened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null)
+                const [screenedRes, allChildrenRes] = await Promise.all([
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null),
+                    adminSb.from('children').select('id').in('awc_id', awcIds)
+                ])
 
-                const { data: allChildren } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds)
-                const childIds = allChildren?.map((c: any) => c.id) || []
+                const screened = screenedRes.count || 0
+                const childIds = allChildrenRes.data?.map((c: any) => c.id) || []
 
-                // Identified = has flags
-                const { data: flaggedChildren } = await adminSb
-                    .from('flags').select('child_id')
-                    .in('child_id', childIds)
-                const identifiedIds = [...new Set(flaggedChildren?.map((f: any) => f.child_id) || [])]
+                if (childIds.length === 0) return NextResponse.json([])
 
-                // Referred
-                const { count: referredCount } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds)
+                // Parallelize remaining pipeline metrics
+                const [flaggedRes, referredRes, interventionRes, completedRes, followupRes] = await Promise.all([
+                    adminSb.from('flags').select('child_id').in('child_id', childIds),
+                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds),
+                    adminSb.from('interventions').select('*', { count: 'exact', head: true }).in('child_id', childIds),
+                    adminSb.from('interventions').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'completed'),
+                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('follow_up_status', 'completed')
+                ])
 
-                // Intervention started
-                const { count: interventionCount } = await adminSb
-                    .from('interventions').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds)
-
-                // Completed
-                const { count: completedCount } = await adminSb
-                    .from('interventions').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds).eq('status', 'completed')
-
-                // Follow-up resolved
-                const { count: followupCount } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds).eq('follow_up_status', 'completed')
+                const identifiedIds = [...new Set(flaggedRes.data?.map((f: any) => f.child_id) || [])]
+                const referredCount = referredRes.count || 0
+                const interventionCount = interventionRes.count || 0
+                const completedCount = completedRes.count || 0
+                const followupCount = followupRes.count || 0
 
                 const s = screened || 0
                 const stages = [
                     { stage: 'Screened', value: s, drop: 0 },
                     { stage: 'Identified', value: identifiedIds.length, drop: s > 0 ? Math.round(((s - identifiedIds.length) / s) * 100) : 0 },
-                    { stage: 'Referred', value: referredCount || 0, drop: identifiedIds.length > 0 ? Math.round(((identifiedIds.length - (referredCount || 0)) / identifiedIds.length) * 100) : 0 },
-                    { stage: 'Intervention Started', value: interventionCount || 0, drop: (referredCount || 0) > 0 ? Math.round((((referredCount || 0) - (interventionCount || 0)) / (referredCount || 0)) * 100) : 0 },
-                    { stage: 'Completed', value: completedCount || 0, drop: (interventionCount || 0) > 0 ? Math.round((((interventionCount || 0) - (completedCount || 0)) / (interventionCount || 0)) * 100) : 0 },
-                    { stage: 'Follow-up Normal', value: followupCount || 0, drop: (completedCount || 0) > 0 ? Math.round((((completedCount || 0) - (followupCount || 0)) / (completedCount || 0)) * 100) : 0 },
+                    { stage: 'Referred', value: referredCount, drop: identifiedIds.length > 0 ? Math.round(((identifiedIds.length - referredCount) / identifiedIds.length) * 100) : 0 },
+                    { stage: 'Intervention Started', value: interventionCount, drop: referredCount > 0 ? Math.round(((referredCount - interventionCount) / referredCount) * 100) : 0 },
+                    { stage: 'Completed', value: completedCount, drop: interventionCount > 0 ? Math.round(((interventionCount - completedCount) / interventionCount) * 100) : 0 },
+                    { stage: 'Follow-up Normal', value: followupCount, drop: completedCount > 0 ? Math.round(((completedCount - followupCount) / completedCount) * 100) : 0 },
                 ]
 
                 return NextResponse.json(stages)
@@ -262,63 +227,45 @@ export async function GET(request: Request) {
                 const startDate = new Date(year, startMonth, 1)
                 const endDate = new Date(year, startMonth + 3, 1)
 
-                // Children registered in this quarter
-                const { data: cohortChildren } = await adminSb
-                    .from('children')
-                    .select('id, is_active, current_risk_level')
-                    .in('awc_id', awcIds)
-                    .gte('registered_at', startDate.toISOString())
-                    .lt('registered_at', endDate.toISOString())
+                // Parallelize cohort children and all registrations for quarter list
+                const [cohortChildrenRes, allRegRes] = await Promise.all([
+                    adminSb.from('children').select('id, is_active, current_risk_level').in('awc_id', awcIds).gte('registered_at', startDate.toISOString()).lt('registered_at', endDate.toISOString()),
+                    adminSb.from('children').select('registered_at').in('awc_id', awcIds).order('registered_at', { ascending: true })
+                ])
 
-                const size = cohortChildren?.length || 0
-                const active = cohortChildren?.filter((c: any) => c.is_active).length || 0
+                const cohortChildren = cohortChildrenRes.data || []
+                const size = cohortChildren.length
+                const active = cohortChildren.filter((c: any) => c.is_active).length
                 const retention = size > 0 ? Math.round((active / size) * 100) : 0
 
-                // Outcome distribution
-                let normalDev = 0, referred = 0, underIntervention = 0, lostFollowup = 0, pending = 0
-                const cohortIds = cohortChildren?.map((c: any) => c.id) || []
+                let outcomes: any[] = []
+                if (size > 0) {
+                    const cohortIds = cohortChildren.map((c: any) => c.id)
 
-                if (cohortIds.length > 0) {
-                    // Normal = no risk flag or normal risk level
-                    normalDev = cohortChildren?.filter((c: any) => !c.current_risk_level || c.current_risk_level === 'normal').length || 0
+                    // Parallelize outcome counts
+                    const [resolvedRefsRes, activeIntRes, lostRes] = await Promise.all([
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', cohortIds).eq('status', 'completed'),
+                        adminSb.from('interventions').select('*', { count: 'exact', head: true }).in('child_id', cohortIds).eq('status', 'in_progress'),
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', cohortIds).eq('follow_up_status', 'lost_to_followup')
+                    ])
 
-                    // Referred & resolved
-                    const { count: resolvedRefs } = await adminSb
-                        .from('referrals').select('*', { count: 'exact', head: true })
-                        .in('child_id', cohortIds).eq('status', 'completed')
-                    referred = resolvedRefs || 0
+                    const normalDev = cohortChildren.filter((c: any) => !c.current_risk_level || c.current_risk_level === 'normal').length
+                    const referred = resolvedRefsRes.count || 0
+                    const underIntervention = activeIntRes.count || 0
+                    const lostFollowup = lostRes.count || 0
+                    const pending = Math.max(0, size - normalDev - referred - underIntervention - lostFollowup)
 
-                    // Under intervention
-                    const { count: activeInt } = await adminSb
-                        .from('interventions').select('*', { count: 'exact', head: true })
-                        .in('child_id', cohortIds).eq('status', 'in_progress')
-                    underIntervention = activeInt || 0
-
-                    // Lost to follow-up
-                    const { count: lost } = await adminSb
-                        .from('referrals').select('*', { count: 'exact', head: true })
-                        .in('child_id', cohortIds).eq('follow_up_status', 'lost_to_followup')
-                    lostFollowup = lost || 0
-
-                    // Pending = rest
-                    pending = Math.max(0, size - normalDev - referred - underIntervention - lostFollowup)
+                    outcomes = [
+                        { name: 'Normal Development', value: Math.round((normalDev / size) * 100), color: '#22C55E' },
+                        { name: 'Referred & Resolved', value: Math.round((referred / size) * 100), color: '#000000' },
+                        { name: 'Under Intervention', value: Math.round((underIntervention / size) * 100), color: '#3B82F6' },
+                        { name: 'Lost to Follow-up', value: Math.round((lostFollowup / size) * 100), color: '#EF4444' },
+                        { name: 'Still Pending', value: Math.round((pending / size) * 100), color: '#F59E0B' },
+                    ]
                 }
 
-                const outcomes = size > 0 ? [
-                    { name: 'Normal Development', value: Math.round((normalDev / size) * 100), color: '#22C55E' },
-                    { name: 'Referred & Resolved', value: Math.round((referred / size) * 100), color: '#000000' },
-                    { name: 'Under Intervention', value: Math.round((underIntervention / size) * 100), color: '#3B82F6' },
-                    { name: 'Lost to Follow-up', value: Math.round((lostFollowup / size) * 100), color: '#EF4444' },
-                    { name: 'Still Pending', value: Math.round((pending / size) * 100), color: '#F59E0B' },
-                ] : []
-
-                // Available quarters
-                const { data: allReg } = await adminSb
-                    .from('children').select('registered_at')
-                    .in('awc_id', awcIds).order('registered_at', { ascending: true })
-
                 const quarterSet = new Set<string>()
-                allReg?.forEach((c: any) => {
+                allRegRes.data?.forEach((c: any) => {
                     const d = new Date(c.registered_at)
                     quarterSet.add(`Q${Math.ceil((d.getMonth() + 1) / 3)}-${d.getFullYear().toString().slice(-2)}`)
                 })
@@ -335,31 +282,27 @@ export async function GET(request: Request) {
             case 'before-after': {
                 if (awcIds.length === 0) return NextResponse.json([])
 
-                const { count: total } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true)
+                const [totalRes, screenedRes, riskKidsRes] = await Promise.all([
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).eq('is_active', true),
+                    adminSb.from('children').select('*', { count: 'exact', head: true }).in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null),
+                    adminSb.from('children').select('id').in('awc_id', awcIds).in('current_risk_level', ['high', 'critical'])
+                ])
 
-                const { count: screened } = await adminSb
-                    .from('children').select('*', { count: 'exact', head: true })
-                    .in('awc_id', awcIds).eq('is_active', true).not('last_screening_date', 'is', null)
-
-                const { data: riskKids } = await adminSb
-                    .from('children').select('id')
-                    .in('awc_id', awcIds).in('current_risk_level', ['high', 'critical'])
-
-                const t = total || 0
-                const s = screened || 0
-                const riskCount = riskKids?.length || 0
+                const t = totalRes.count || 0
+                const s = screenedRes.count || 0
+                const riskCount = riskKidsRes.data?.length || 0
                 const currentIdRate = t > 0 ? Math.round((riskCount / t) * 10000) / 10 : 0
                 const currentCoverage = t > 0 ? Math.round((s / t) * 100) : 0
 
                 // Referral completion
-                const childIds = riskKids?.map((c: any) => c.id) || []
+                const childIds = riskKidsRes.data?.map((c: any) => c.id) || []
                 let refCompletion = 0
                 if (childIds.length > 0) {
-                    const { count: totalRef } = await adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds)
-                    const { count: completedRef } = await adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'completed')
-                    refCompletion = (totalRef || 0) > 0 ? Math.round(((completedRef || 0) / (totalRef || 0)) * 100) : 0
+                    const [totalRefRes, completedRefRes] = await Promise.all([
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds),
+                        adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'completed')
+                    ])
+                    refCompletion = (totalRefRes.count || 0) > 0 ? Math.round(((completedRefRes.count || 0) / (totalRefRes.count || 0)) * 100) : 0
                 }
 
                 const delta = (before: number, after: number) => {
@@ -370,28 +313,28 @@ export async function GET(request: Request) {
 
                 const result = [
                     {
-                        label: 'Identification Rate',
+                        label: 'analytics.ba.metric.idRate',
                         before: `${BASELINE.identificationRate} / 1000`,
                         after: `${currentIdRate} / 1000`,
                         delta: delta(BASELINE.identificationRate, currentIdRate),
                         positive: currentIdRate > BASELINE.identificationRate
                     },
                     {
-                        label: 'Referral Completion',
+                        label: 'analytics.ba.metric.refCompletion',
                         before: `${BASELINE.referralCompletion}%`,
                         after: `${refCompletion}%`,
                         delta: delta(BASELINE.referralCompletion, refCompletion),
                         positive: refCompletion > BASELINE.referralCompletion
                     },
                     {
-                        label: 'Specialist Access',
+                        label: 'analytics.ba.metric.specialistAccess',
                         before: BASELINE.specialistAccess,
                         after: 'High (Digital)',
                         delta: 'Managed',
                         positive: true
                     },
                     {
-                        label: 'Coverage Rate',
+                        label: 'analytics.ba.metric.coverageRate',
                         before: `${BASELINE.coverageRate}%`,
                         after: `${currentCoverage}%`,
                         delta: delta(BASELINE.coverageRate, currentCoverage),

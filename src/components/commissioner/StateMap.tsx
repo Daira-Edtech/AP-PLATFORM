@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { DISTRICT_MOCK_DATA } from '@/lib/commissioner/constants';
 import { DistrictData } from '@/lib/commissioner/types';
 import { AP_DISTRICT_PATHS, AP_VIEWBOX } from '@/data/apDistrictPaths';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 interface StateMapProps {
   onDistrictSelect: (district: DistrictData) => void;
@@ -11,6 +12,7 @@ interface StateMapProps {
 
 const StateMap: React.FC<StateMapProps> = ({ onDistrictSelect }) => {
   const [hoveredDistrict, setHoveredDistrict] = useState<DistrictData | null>(null);
+  const { t } = useLanguage();
 
   // Pastel fill colors for visual variety
   const DISTRICT_COLORS: Record<string, string> = {
@@ -31,8 +33,8 @@ const StateMap: React.FC<StateMapProps> = ({ onDistrictSelect }) => {
     <div className="relative w-full h-[520px] bg-white border border-[#E5E5E5] rounded-lg p-6 flex flex-col shadow-sm">
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h3 className="text-[18px] font-bold text-black uppercase tracking-tight">District Coverage Map</h3>
-          <p className="text-[12px] text-[#888888]">Andhra Pradesh — Shaded by Screening Reach</p>
+          <h3 className="text-[18px] font-bold text-black uppercase tracking-tight">{t('map.title')}</h3>
+          <p className="text-[12px] text-[#888888]">{t('map.subtitle')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
@@ -40,7 +42,7 @@ const StateMap: React.FC<StateMapProps> = ({ onDistrictSelect }) => {
             <div className="w-32 h-2 rounded-full bg-gradient-to-r from-white to-black border border-[#EEE]" />
             <span className="text-[10px] font-bold text-[#888]">100%</span>
           </div>
-          <span className="text-[11px] text-[#555] font-medium">State Avg: <span className="font-bold">67%</span></span>
+          <span className="text-[11px] text-[#555] font-medium">{t('map.stateAvg')}: <span className="font-bold">67%</span></span>
         </div>
       </div>
 
@@ -90,7 +92,7 @@ const StateMap: React.FC<StateMapProps> = ({ onDistrictSelect }) => {
 
         {/* Legend Overlay */}
         <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl p-6 border border-white/5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-[12px] text-white z-20 min-w-[180px]">
-          <h4 className="border-b border-white/10 pb-3 mb-4 font-bold uppercase tracking-[0.2em] text-[10px] text-white/50">District Intelligence</h4>
+          <h4 className="border-b border-white/10 pb-3 mb-4 font-bold uppercase tracking-[0.2em] text-[10px] text-white/50">{t('map.districtIntelligence')}</h4>
           <div className="flex flex-col gap-4">
             <div className="flex justify-between items-center group/item cursor-pointer">
               <span className="flex items-center gap-2.5 text-white/80 group-hover/item:text-white transition-colors">
@@ -115,26 +117,26 @@ const StateMap: React.FC<StateMapProps> = ({ onDistrictSelect }) => {
             <h4 className="font-bold text-[15px] mb-3 border-b border-[#333] pb-2 uppercase tracking-wide">{hoveredDistrict.name}</h4>
             <div className="space-y-2">
               <div className="flex justify-between text-[12px]">
-                <span className="text-[#AAAAAA]">Screening Coverage:</span>
+                <span className="text-[#AAAAAA]">{t('map.screeningCoverage')}</span>
                 <span className="font-bold">{hoveredDistrict.coverage}%</span>
               </div>
               <div className="flex justify-between text-[12px]">
-                <span className="text-[#AAAAAA]">Risk Children:</span>
+                <span className="text-[#AAAAAA]">{t('map.riskChildren')}</span>
                 <span className="font-bold">{(hoveredDistrict.children * 0.1).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-[12px]">
-                <span className="text-[#AAAAAA]">Referral Completion:</span>
+                <span className="text-[#AAAAAA]">{t('map.referralCompletion')}</span>
                 <span className="font-bold">
                   {Math.round((hoveredDistrict.referralsDone / (hoveredDistrict.referralsActive + hoveredDistrict.referralsDone)) * 100)}%
                 </span>
               </div>
               <div className="flex justify-between text-[12px]">
-                <span className="text-[#AAAAAA]">Total Capacity:</span>
+                <span className="text-[#AAAAAA]">{t('map.totalCapacity')}</span>
                 <span className="font-bold">{hoveredDistrict.children.toLocaleString()}</span>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-[#333] text-[10px] text-center text-[#888] font-bold tracking-widest uppercase">
-              Click to drill down
+              {t('map.clickToDrill')}
             </div>
           </div>
         )}

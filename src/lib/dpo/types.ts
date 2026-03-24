@@ -72,8 +72,7 @@ export interface RiskAnalysisStats {
     riskHistory: { name: string; Low: number; Med: number; High: number; Crit: number }[];
     domainHeatmap: { domain: string; scores: number[] }[];
     highRiskChildren: {
-        id: string;
-        shortId?: string;
+        shortId: string;
         name: string;
         age: string;
         awc: string;
@@ -186,7 +185,7 @@ export interface DpoScreeningStats {
     domainHeatmap: { domain: string; scores: number[] }[];
     highRiskChildren: {
         id: string;
-        shortId?: string;
+        shortId: string;
         name: string;
         age: string;
         awc: string;
@@ -239,7 +238,7 @@ export interface ChildDetailData {
         level: string;
         by: string;
         status: string;
-        scores?: any;
+        scores: Record<string, number>;
     }[];
     flags: {
         id: string;
@@ -257,4 +256,3 @@ export interface ChildDetailData {
         referredBy: string;
     }[];
 }
-

@@ -16,141 +16,163 @@ export async function GET() {
 
         if (!stateId) return NextResponse.json({ error: 'Commissioner not assigned to a state' }, { status: 403 })
 
-        // Fetch all districts only for this state
-        const { data: districts, error: distError } = await supabase
+        // 1. Fetch districts
+        const districtsRes = await supabase
             .from('districts')
-            .select('id, name, code, state_id')
+            .select('id, name, code')
             .eq('state_id', stateId)
             .order('name')
 
-        if (distError || !districts) {
-            return NextResponse.json({ error: distError?.message || 'Failed to fetch districts' }, { status: 500 })
-        }
+        const districts = districtsRes.data || []
+        if (districts.length === 0) return NextResponse.json([])
 
         const districtIds = districts.map(d => d.id)
-        if (districtIds.length === 0) return NextResponse.json([])
 
-        // Fetch mandals
-        const { data: mandals } = await supabase.from('mandals').select('id, district_id').in('district_id', districtIds)
-        const mandalIds = (mandals || []).map(m => m.id)
+        // 2. Fetch mandals for these districts
+        const { data: mandals } = await supabase
+            .from('mandals')
+            .select('id, district_id')
+            .in('district_id', districtIds)
 
-        // Fetch AWCs with capacity
-        const { data: awcs } = await supabase.from('awcs').select('id, mandal_id, target_children').in('mandal_id', mandalIds.length ? mandalIds : [stateId]).eq('is_active', true)
-        const awcIds = (awcs || []).map(a => a.id)
+        const mandalArr = mandals || []
+        const mandalIds = mandalArr.map(m => m.id)
 
-        // Fetch children
-        const { data: children } = await supabase.from('children').select('id, awc_id, current_risk_level, last_screening_date').in('awc_id', awcIds.length ? awcIds : [stateId]).eq('is_active', true)
-        const childIds = (children || []).map(c => c.id)
+        if (mandalIds.length === 0) {
+            // No mandals, return empty district data
+            return NextResponse.json(districts.map(d => ({
+                id: d.id, name: d.name, code: d.code,
+                mandal_count: 0, awc_count: 0, total_children: 0, screened: 0, coverage_pct: 0,
+                risk_low: 0, risk_medium: 0, risk_high: 0, risk_critical: 0,
+                escalations: 0, referrals_active: 0, referrals_done: 0,
+                dpo_name: '—', cdpo_count: 0, avg_wait: 0, facility_load: 0, performance: 0, trend: []
+            })))
+        }
 
-        // Fetch flags
-        const { data: flags } = await supabase.from('flags').select('id, child_id, escalated_to, status').in('child_id', childIds.length ? childIds : [stateId])
+        // Mandal -> District Map
+        const m2d: Record<string, string> = {}
+        mandalArr.forEach(m => m2d[m.id] = m.district_id)
 
-        // Fetch referrals with timestamps
-        const { data: referrals } = await supabase.from('referrals').select('id, child_id, status, created_at, completed_at').in('child_id', childIds.length ? childIds : [stateId])
+        // 3. Fetch AWCs and profiles in parallel
+        const [awcsRes, dpoRes, cdpoRes] = await Promise.all([
+            supabase.from('awcs').select('id, mandal_id, target_children').in('mandal_id', mandalIds).eq('is_active', true),
+            supabase.from('profiles').select('name, district_id').eq('role', 'district_officer').in('district_id', districtIds).eq('is_active', true),
+            supabase.from('profiles').select('district_id').eq('role', 'cdpo').in('district_id', districtIds).eq('is_active', true)
+        ])
 
-        // Fetch DPO profiles
-        const { data: dpoProfiles } = await supabase.from('profiles').select('name, district_id').eq('role', 'district_officer').in('district_id', districtIds).eq('is_active', true)
+        const awcs = awcsRes.data || []
+        const awcIds = awcs.map(a => a.id)
+        const dpoProfiles = dpoRes.data || []
+        const cdpoProfiles = cdpoRes.data || []
 
-        // Fetch CDPO profiles
-        const { data: cdpoProfiles } = await supabase.from('profiles').select('id, district_id').eq('role', 'cdpo').in('district_id', districtIds).eq('is_active', true)
+        if (awcIds.length === 0) {
+            // No AWCs, return district data with mandal counts only
+            return NextResponse.json(districts.map(d => ({
+                id: d.id, name: d.name, code: d.code,
+                mandal_count: mandalArr.filter(m => m.district_id === d.id).length,
+                awc_count: 0, total_children: 0, screened: 0, coverage_pct: 0,
+                risk_low: 0, risk_medium: 0, risk_high: 0, risk_critical: 0,
+                escalations: 0, referrals_active: 0, referrals_done: 0,
+                dpo_name: dpoProfiles.find(p => p.district_id === d.id)?.name || '—',
+                cdpo_count: cdpoProfiles.filter(p => p.district_id === d.id).length,
+                avg_wait: 0, facility_load: 0, performance: 0, trend: []
+            })))
+        }
 
-        // Build DPO name map
-        const dpoMap: Record<string, string> = {}
-            ; (dpoProfiles || []).forEach((p) => { if (p.district_id) dpoMap[p.district_id] = p.name })
+        // AWC -> District Map and capacity calculation
+        const a2d: Record<string, string> = {}
+        const distCapacity: Record<string, number> = {}
+        const distAwcCount: Record<string, number> = {}
+        awcs.forEach(a => {
+            const dId = m2d[a.mandal_id]
+            if (dId) {
+                a2d[a.id] = dId
+                distCapacity[dId] = (distCapacity[dId] || 0) + (a.target_children || 25)
+                distAwcCount[dId] = (distAwcCount[dId] || 0) + 1
+            }
+        })
 
-        // Build CDPO count map
-        const cdpoCountMap: Record<string, number> = {}
-            ; (cdpoProfiles || []).forEach((p) => {
-                if (p.district_id) cdpoCountMap[p.district_id] = (cdpoCountMap[p.district_id] || 0) + 1
-            })
+        // 4. Fetch children ONLY for these AWCs (this is the key optimization)
+        const { data: children } = await supabase
+            .from('children')
+            .select('id, awc_id, current_risk_level, last_screening_date')
+            .in('awc_id', awcIds)
+            .eq('is_active', true)
 
-        // Mandal → district mapping
-        const mandalToDistrict: Record<string, string> = {}
-        const districtMandals: Record<string, string[]> = {}
-            ; (mandals || []).forEach((m) => {
-                mandalToDistrict[m.id] = m.district_id
-                if (!districtMandals[m.district_id]) districtMandals[m.district_id] = []
-                districtMandals[m.district_id].push(m.id)
-            })
-
-        // AWC → district mapping + capacity
-        const awcToDistrict: Record<string, string> = {}
-        const districtAWCs: Record<string, string[]> = {}
-        const districtCapacity: Record<string, number> = {}
-            ; (awcs || []).forEach((a) => {
-                const distId = mandalToDistrict[a.mandal_id]
-                if (distId) {
-                    awcToDistrict[a.id] = distId
-                    if (!districtAWCs[distId]) districtAWCs[distId] = []
-                    districtAWCs[distId].push(a.id)
-                    districtCapacity[distId] = (districtCapacity[distId] || 0) + (a.target_children || 25)
-                }
-            })
+        const childrenArr = children || []
+        const childIds = childrenArr.map(c => c.id)
 
         // Child aggregation
-        const childToDistrict: Record<string, string> = {}
-        const districtChildren: Record<string, { total: number; screened: number; riskLow: number; riskMedium: number; riskHigh: number; riskCritical: number }> = {}
-            ; (children || []).forEach((c) => {
-                const distId = awcToDistrict[c.awc_id]
-                if (!distId) return
-                childToDistrict[c.id] = distId
-                if (!districtChildren[distId]) districtChildren[distId] = { total: 0, screened: 0, riskLow: 0, riskMedium: 0, riskHigh: 0, riskCritical: 0 }
-                const agg = districtChildren[distId]
-                agg.total++
-                if (c.last_screening_date) agg.screened++
-                if (c.current_risk_level === 'low') agg.riskLow++
-                if (c.current_risk_level === 'medium') agg.riskMedium++
-                if (c.current_risk_level === 'high') agg.riskHigh++
-                if (c.current_risk_level === 'critical') agg.riskCritical++
-            })
+        const child2dist: Record<string, string> = {}
+        const distChildren: Record<string, any> = {}
+        childrenArr.forEach(c => {
+            const dId = a2d[c.awc_id]
+            if (!dId) return
+            child2dist[c.id] = dId
+            if (!distChildren[dId]) distChildren[dId] = { total: 0, screened: 0, riskLow: 0, riskMedium: 0, riskHigh: 0, riskCritical: 0 }
+            const agg = distChildren[dId]
+            agg.total++
+            if (c.last_screening_date) agg.screened++
+            if (c.current_risk_level === 'low') agg.riskLow++
+            else if (c.current_risk_level === 'medium') agg.riskMedium++
+            else if (c.current_risk_level === 'high') agg.riskHigh++
+            else if (c.current_risk_level === 'critical') agg.riskCritical++
+        })
 
-        // Escalations
-        const districtEscalations: Record<string, number> = {}
-            ; (flags || []).forEach((f) => {
-                if (f.status === 'escalated') {
-                    const distId = childToDistrict[f.child_id]
-                    if (distId) districtEscalations[distId] = (districtEscalations[distId] || 0) + 1
+        // 5. Fetch flags and referrals ONLY for these children (another key optimization)
+        let flagData: any[] = []
+        let refData: any[] = []
+
+        if (childIds.length > 0) {
+            const [flagRes, refRes] = await Promise.all([
+                supabase.from('flags').select('status, child_id').in('child_id', childIds).eq('status', 'escalated'),
+                supabase.from('referrals').select('status, child_id, created_at, completed_at').in('child_id', childIds)
+            ])
+            flagData = flagRes.data || []
+            refData = refRes.data || []
+        }
+
+        // Flag aggregation
+        const distEsc: Record<string, number> = {}
+        flagData.forEach((f: any) => {
+            const dId = child2dist[f.child_id]
+            if (dId) distEsc[dId] = (distEsc[dId] || 0) + 1
+        })
+
+        // Referral aggregation
+        const distRefActive: Record<string, number> = {}
+        const distRefDone: Record<string, number> = {}
+        const distWait: Record<string, number[]> = {}
+        refData.forEach((r: any) => {
+            const dId = child2dist[r.child_id]
+            if (!dId) return
+            if (['generated', 'sent', 'scheduled'].includes(r.status)) distRefActive[dId] = (distRefActive[dId] || 0) + 1
+            else if (r.status === 'completed') {
+                distRefDone[dId] = (distRefDone[dId] || 0) + 1
+                if (r.created_at && r.completed_at) {
+                    const days = Math.round((new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / 86400000)
+                    if (!distWait[dId]) distWait[dId] = []
+                    distWait[dId].push(days)
                 }
-            })
+            }
+        })
 
-        // Referrals + wait time
-        const districtReferralsActive: Record<string, number> = {}
-        const districtReferralsDone: Record<string, number> = {}
-        const districtWaitDays: Record<string, number[]> = {}
-            ; (referrals || []).forEach((r) => {
-                const distId = childToDistrict[r.child_id]
-                if (!distId) return
-                if (['generated', 'sent', 'scheduled'].includes(r.status)) {
-                    districtReferralsActive[distId] = (districtReferralsActive[distId] || 0) + 1
-                } else if (r.status === 'completed') {
-                    districtReferralsDone[distId] = (districtReferralsDone[distId] || 0) + 1
-                    if (r.created_at && r.completed_at) {
-                        const days = Math.round((new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / 86400000)
-                        if (!districtWaitDays[distId]) districtWaitDays[distId] = []
-                        districtWaitDays[distId].push(days)
-                    }
-                }
-            })
-
-        // Build results
-        const results: DistrictSummary[] = districts.map((d) => {
-            const agg = districtChildren[d.id] || { total: 0, screened: 0, riskLow: 0, riskMedium: 0, riskHigh: 0, riskCritical: 0 }
-            const coveragePct = agg.total > 0 ? Math.round((agg.screened / agg.total) * 1000) / 10 : 0
-            const capacity = districtCapacity[d.id] || 1
-            const facilityLoad = Math.round((agg.total / capacity) * 100)
-            const waitArr = districtWaitDays[d.id] || []
+        // 6. Final result mapping
+        const results: DistrictSummary[] = districts.map(d => {
+            const agg = distChildren[d.id] || { total: 0, screened: 0, riskLow: 0, riskMedium: 0, riskHigh: 0, riskCritical: 0 }
+            const waitArr = distWait[d.id] || []
             const avgWait = waitArr.length > 0 ? Math.round(waitArr.reduce((a, b) => a + b, 0) / waitArr.length) : 0
-            const refTotal = (districtReferralsActive[d.id] || 0) + (districtReferralsDone[d.id] || 0)
-            const refRate = refTotal > 0 ? (districtReferralsDone[d.id] || 0) / refTotal : 1
-            const escScore = agg.total > 0 ? Math.max(0, 100 - ((districtEscalations[d.id] || 0) / agg.total) * 1000) : 100
-            const performance = Math.round(coveragePct * 0.4 + refRate * 100 * 0.3 + escScore * 0.3)
+
+            const coveragePct = agg.total > 0 ? Math.round((agg.screened / agg.total) * 1000) / 10 : 0
+            const refTotal = (distRefActive[d.id] || 0) + (distRefDone[d.id] || 0)
+            const refRate = refTotal > 0 ? (distRefDone[d.id] || 0) / refTotal : 1
+            const escScore = agg.total > 0 ? Math.max(0, 100 - ((distEsc[d.id] || 0) / agg.total) * 1000) : 100
 
             return {
                 id: d.id,
                 name: d.name,
                 code: d.code,
-                mandal_count: (districtMandals[d.id] || []).length,
-                awc_count: (districtAWCs[d.id] || []).length,
+                mandal_count: mandalArr.filter(m => m.district_id === d.id).length,
+                awc_count: distAwcCount[d.id] || 0,
                 total_children: agg.total,
                 screened: agg.screened,
                 coverage_pct: coveragePct,
@@ -158,15 +180,15 @@ export async function GET() {
                 risk_medium: agg.riskMedium,
                 risk_high: agg.riskHigh,
                 risk_critical: agg.riskCritical,
-                escalations: districtEscalations[d.id] || 0,
-                referrals_active: districtReferralsActive[d.id] || 0,
-                referrals_done: districtReferralsDone[d.id] || 0,
-                dpo_name: dpoMap[d.id] || '—',
-                cdpo_count: cdpoCountMap[d.id] || 0,
+                escalations: distEsc[d.id] || 0,
+                referrals_active: distRefActive[d.id] || 0,
+                referrals_done: distRefDone[d.id] || 0,
+                dpo_name: dpoProfiles.find(p => p.district_id === d.id)?.name || '—',
+                cdpo_count: cdpoProfiles.filter(p => p.district_id === d.id).length,
                 avg_wait: avgWait,
-                facility_load: Math.min(facilityLoad, 100),
-                performance: Math.min(performance, 100),
-                trend: [],
+                facility_load: Math.min(Math.round((agg.total / (distCapacity[d.id] || 1)) * 100), 100),
+                performance: Math.round(coveragePct * 0.4 + refRate * 100 * 0.3 + escScore * 0.3),
+                trend: []
             }
         })
 

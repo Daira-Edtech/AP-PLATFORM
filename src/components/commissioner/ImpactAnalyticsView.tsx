@@ -10,16 +10,26 @@ import {
    ArrowRight, AlertTriangle, Target, Zap
 } from 'lucide-react';
 import KPICard from '@/components/commissioner/KPICard';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 const Skeleton = ({ className = '' }: { className?: string }) => (
    <div className={`animate-pulse bg-gray-100 rounded ${className}`} />
 );
 
 const ImpactAnalyticsView: React.FC = () => {
+   const { t } = useLanguage();
    const [activeTab, setActiveTab] = useState('Programme Impact');
    const [selectedCohort, setSelectedCohort] = useState('');
 
    const tabs = ['Programme Impact', 'Cohort Tracking', 'Before / After'];
+   const getTabLabel = (tab: string) => {
+      switch(tab) {
+         case 'Programme Impact': return t('analytics.tab.impact');
+         case 'Cohort Tracking': return t('analytics.tab.cohort');
+         case 'Before / After': return t('analytics.tab.beforeAfter');
+         default: return tab;
+      }
+   };
 
    // ═══ STATE ═══
    const [loading, setLoading] = useState(true);
@@ -83,10 +93,10 @@ const ImpactAnalyticsView: React.FC = () => {
 
    // ═══ DERIVED ═══
    const impactKPIs = impactData ? [
-      { id: 'i1', label: 'IDENTIFICATION IMPROVEMENT', value: `${impactData.kpis.identificationImprovement}%`, delta: impactData.kpis.identificationImprovement > 0 ? 1 : 0, trend: [], accent: '#22C55E' },
-      { id: 'i2', label: 'SCREENING GROWTH (YoY)', value: `${impactData.kpis.screeningGrowthYoY > 0 ? '+' : ''}${impactData.kpis.screeningGrowthYoY}%`, delta: impactData.kpis.screeningGrowthYoY, trend: [], accent: '#3B82F6' },
-      { id: 'i3', label: 'REFERRAL COMPLETION', value: `${impactData.kpis.referralCompletion}%`, delta: 0, trend: [], accent: '#000000' },
-      { id: 'i4', label: 'AVG TIME TO INTERVENTION', value: impactData.kpis.avgTimeToIntervention > 0 ? `${impactData.kpis.avgTimeToIntervention} days` : 'N/A', delta: 0, trend: [], accent: '#F59E0B' },
+      { id: 'i1', label: t('analytics.kpi.idImprovement'), value: `${impactData.kpis.identificationImprovement}%`, delta: impactData.kpis.identificationImprovement > 0 ? 1 : 0, trend: [], accent: '#22C55E' },
+      { id: 'i2', label: t('analytics.kpi.screeningGrowth'), value: `${impactData.kpis.screeningGrowthYoY > 0 ? '+' : ''}${impactData.kpis.screeningGrowthYoY}%`, delta: impactData.kpis.screeningGrowthYoY, trend: [], accent: '#3B82F6' },
+      { id: 'i3', label: t('analytics.kpi.referralCompletion'), value: `${impactData.kpis.referralCompletion}%`, delta: 0, trend: [], accent: '#000000' },
+      { id: 'i4', label: t('analytics.kpi.avgTime'), value: impactData.kpis.avgTimeToIntervention > 0 ? `${impactData.kpis.avgTimeToIntervention} ${t('analytics.kpi.days')}` : t('analytics.kpi.na'), delta: 0, trend: [], accent: '#F59E0B' },
    ] : [];
 
    const maxPipelineValue = Math.max(1, ...pipelineData.map((p: any) => p.value));
@@ -96,12 +106,12 @@ const ImpactAnalyticsView: React.FC = () => {
          {/* HEADER */}
          <div className="flex justify-between items-end mb-8">
             <div>
-               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Impact Analytics</h1>
-               <p className="text-[14px] text-[#888888] font-medium">Measuring longitudinal programme outcomes and effectiveness since launch</p>
+               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('analytics.title')}</h1>
+               <p className="text-[14px] text-[#888888] font-medium">{t('analytics.subtitle')}</p>
             </div>
             <div className="flex items-center gap-3">
                <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-                  <Download size={16} /> Impact Report (PDF)
+                  <Download size={16} /> {t('analytics.exportPDF')}
                </button>
             </div>
          </div>
@@ -115,7 +125,7 @@ const ImpactAnalyticsView: React.FC = () => {
                   className={`px-8 py-4 text-[13px] font-bold transition-all relative whitespace-nowrap ${activeTab === tab ? 'text-black' : 'text-[#888] hover:text-[#555]'
                      }`}
                >
-                  {tab}
+                  {getTabLabel(tab)}
                   {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black" />}
                </button>
             ))}
@@ -137,16 +147,16 @@ const ImpactAnalyticsView: React.FC = () => {
                         <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-black" />
                         <div className="flex flex-col gap-4">
                            <h2 className="text-[18px] font-semibold text-black tracking-tight leading-relaxed">
-                              <span className="font-black text-[22px]">{(impactData?.headline.riskChildren || 0).toLocaleString()}</span> children identified as High/Critical risk —
-                              <span className="font-black text-[22px]"> {(impactData?.headline.referred || 0).toLocaleString()}</span> referred —
-                              <span className="font-black text-[22px]"> {(impactData?.headline.intervened || 0).toLocaleString()}</span> received intervention
-                              <span className="text-[#888] ml-2">({impactData?.headline.completionRate || 0}% completion rate)</span>
+                              <span className="font-black text-[22px]">{(impactData?.headline.riskChildren || 0).toLocaleString()}</span> {t('analytics.impact.childrenRisk')}
+                              <span className="font-black text-[22px]"> {(impactData?.headline.referred || 0).toLocaleString()}</span> {t('analytics.impact.referred')}
+                              <span className="font-black text-[22px]"> {(impactData?.headline.intervened || 0).toLocaleString()}</span> {t('analytics.impact.intervened')}
+                              <span className="text-[#888] ml-2">({impactData?.headline.completionRate || 0}% {t('analytics.impact.completionRate')})</span>
                            </h2>
                            {impactData?.kpis.identificationImprovement > 0 && (
                               <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-100">
                                  <Zap className="text-green-600" size={20} />
                                  <p className="text-[14px] text-green-900 font-medium leading-relaxed">
-                                    Estimated early identification rate improved by <span className="font-black">{impactData.kpis.identificationImprovement}%</span> compared to the pre-programme baseline.
+                                    {t('analytics.impact.estImprovement')} <span className="font-black">{impactData.kpis.identificationImprovement}%</span> {t('analytics.impact.comparedToBaseline')}
                                  </p>
                               </div>
                            )}
@@ -160,15 +170,15 @@ const ImpactAnalyticsView: React.FC = () => {
                      {/* Longitudinal Chart */}
                      <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                         <div className="flex justify-between items-center mb-10">
-                           <h3 className="text-[16px] font-black uppercase tracking-tight">Early Identification Over Time</h3>
+                           <h3 className="text-[16px] font-black uppercase tracking-tight">{t('analytics.impact.idOverTime')}</h3>
                            <div className="flex gap-6">
                               <div className="flex items-center gap-2">
                                  <div className="w-3 h-3 bg-[#F0F0F0] rounded-sm" />
-                                 <span className="text-[11px] font-bold text-[#888] uppercase">Children Registered</span>
+                                 <span className="text-[11px] font-bold text-[#888] uppercase">{t('analytics.impact.childrenReg')}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                  <div className="w-4 h-[2px] bg-black" />
-                                 <span className="text-[11px] font-bold text-black uppercase">High-Risk Rate (per 1k)</span>
+                                 <span className="text-[11px] font-bold text-black uppercase">{t('analytics.impact.highRiskRate')}</span>
                               </div>
                            </div>
                         </div>
@@ -195,13 +205,13 @@ const ImpactAnalyticsView: React.FC = () => {
                      <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                         <div className="flex justify-between items-center mb-10">
                            <div>
-                              <h3 className="text-[16px] font-black uppercase tracking-tight">Intervention Pipeline Health</h3>
-                              <p className="text-[12px] text-[#888]">Tracking drop-off rates from screening to outcome resolution</p>
+                              <h3 className="text-[16px] font-black uppercase tracking-tight">{t('analytics.impact.pipelineHealth')}</h3>
+                              <p className="text-[12px] text-[#888]">{t('analytics.impact.trackingDropOff')}</p>
                            </div>
                            {pipelineData.some((p: any) => p.drop > 80) && (
                               <div className="flex items-center gap-2">
                                  <AlertTriangle size={16} className="text-red-600" />
-                                 <span className="text-[11px] font-black text-red-700 uppercase">High Drop-off Detected</span>
+                                 <span className="text-[11px] font-black text-red-700 uppercase">{t('analytics.impact.highDropOff')}</span>
                               </div>
                            )}
                         </div>
@@ -221,7 +231,7 @@ const ImpactAnalyticsView: React.FC = () => {
                                        {idx < pipelineData.length - 1 && item.drop > 0 && (
                                           <div className="absolute -bottom-4 left-0 right-0 flex justify-center">
                                              <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${item.drop > 30 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-50 text-[#888] border-gray-200'}`}>
-                                                {item.drop}% Drop
+                                                {item.drop}% {t('analytics.impact.dropBtn')}
                                              </div>
                                           </div>
                                        )}
@@ -230,7 +240,7 @@ const ImpactAnalyticsView: React.FC = () => {
                               ))}
                            </div>
                         ) : (
-                           <div className="py-12 text-center text-[#888] text-[13px]">No pipeline data — referrals and interventions will appear here once recorded.</div>
+                           <div className="py-12 text-center text-[#888] text-[13px]">{t('analytics.impact.noPipelineData')}</div>
                         )}
                      </div>
                   </>
@@ -247,9 +257,9 @@ const ImpactAnalyticsView: React.FC = () => {
                   <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                      <div className="flex justify-between items-center mb-10">
                         <div>
-                           <h3 className="text-[16px] font-black uppercase tracking-tight mb-1">Cohort Analysis</h3>
+                           <h3 className="text-[16px] font-black uppercase tracking-tight mb-1">{t('analytics.cohort.title')}</h3>
                            <div className="flex items-center gap-2 text-[13px] text-[#888]">
-                              Cohort:
+                              {t('analytics.cohort.label')}
                               <div className="relative">
                                  <select
                                     value={selectedCohort}
@@ -260,7 +270,7 @@ const ImpactAnalyticsView: React.FC = () => {
                                        <option key={q} value={q}>{q}</option>
                                     ))}
                                     {(!cohortData?.availableQuarters?.length) && (
-                                       <option value="">No cohorts available</option>
+                                       <option value="">{t('analytics.cohort.noCohorts')}</option>
                                     )}
                                  </select>
                                  <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -269,11 +279,11 @@ const ImpactAnalyticsView: React.FC = () => {
                         </div>
                         <div className="flex gap-4">
                            <div className="p-3 bg-gray-50 rounded border border-gray-100 flex flex-col items-center min-w-[120px]">
-                              <span className="text-[10px] font-bold text-[#888] uppercase">Cohort Size</span>
+                              <span className="text-[10px] font-bold text-[#888] uppercase">{t('analytics.cohort.size')}</span>
                               <span className="text-[20px] font-black">{(cohortData?.size || 0).toLocaleString()}</span>
                            </div>
                            <div className="p-3 bg-black text-white rounded flex flex-col items-center min-w-[120px]">
-                              <span className="text-[10px] font-bold text-[#888] uppercase">Retention</span>
+                              <span className="text-[10px] font-bold text-[#888] uppercase">{t('analytics.cohort.retention')}</span>
                               <span className="text-[20px] font-black">{cohortData?.retention || 0}%</span>
                            </div>
                         </div>
@@ -283,7 +293,7 @@ const ImpactAnalyticsView: React.FC = () => {
                      {cohortData?.outcomes?.length > 0 ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                            <div>
-                              <h4 className="text-[14px] font-black uppercase tracking-widest text-[#AAA] mb-6">Outcome Distribution</h4>
+                              <h4 className="text-[14px] font-black uppercase tracking-widest text-[#AAA] mb-6">{t('analytics.cohort.outcomeDist')}</h4>
                               <div className="h-[280px]">
                                  <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -309,7 +319,7 @@ const ImpactAnalyticsView: React.FC = () => {
                         </div>
                      ) : (
                         <div className="py-16 text-center text-[#888] text-[13px]">
-                           {cohortData?.size === 0 ? 'No children registered in this cohort period.' : 'No outcome data available yet.'}
+                           {cohortData?.size === 0 ? t('analytics.cohort.noRegInfo') : t('analytics.cohort.noOutcomeInfo')}
                         </div>
                      )}
                   </div>
@@ -326,17 +336,17 @@ const ImpactAnalyticsView: React.FC = () => {
                   <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
                      <div className="p-8 border-b border-[#F5F5F5] bg-black text-white flex justify-between items-center">
                         <div>
-                           <h3 className="text-[20px] font-black uppercase tracking-tight mb-1">Pre vs Post Programme Benchmark</h3>
-                           <p className="text-[13px] text-[#888]">Comparative analysis of statewide ICDS metrics (ICDS Baseline vs Jiveesha Platform)</p>
+                           <h3 className="text-[20px] font-black uppercase tracking-tight mb-1">{t('analytics.ba.title')}</h3>
+                           <p className="text-[13px] text-[#888]">{t('analytics.ba.subtitle')}</p>
                         </div>
                         <Target className="opacity-20" size={40} />
                      </div>
 
                      <div className="grid grid-cols-5 bg-[#F9F9F9] text-[11px] font-black uppercase tracking-widest text-[#888] border-b border-[#EEE]">
-                        <div className="col-span-2 px-8 py-4">Operational Metric</div>
-                        <div className="px-8 py-4">Before Jiveesha</div>
-                        <div className="px-8 py-4">After Jiveesha</div>
-                        <div className="px-8 py-4 text-center">Impact Delta</div>
+                        <div className="col-span-2 px-8 py-4">{t('analytics.ba.metricCol')}</div>
+                        <div className="px-8 py-4">{t('analytics.ba.beforeCol')}</div>
+                        <div className="px-8 py-4">{t('analytics.ba.afterCol')}</div>
+                        <div className="px-8 py-4 text-center">{t('analytics.ba.deltaCol')}</div>
                      </div>
 
                      <div className="divide-y divide-[#F5F5F5]">
@@ -360,16 +370,16 @@ const ImpactAnalyticsView: React.FC = () => {
                               </div>
                            ))
                         ) : (
-                           <div className="px-8 py-12 text-center text-[#888] text-[13px]">No comparison data available</div>
+                           <div className="px-8 py-12 text-center text-[#888] text-[13px]">{t('analytics.ba.noData')}</div>
                         )}
                      </div>
 
                      <div className="p-8 bg-[#F9F9F9] flex justify-between items-start">
                         <p className="text-[11px] text-[#AAA] font-medium max-w-lg leading-relaxed italic">
-                           Note: Baseline data (Before Jiveesha) is extracted from historical ICDS records prior to programme launch. Jiveesha metrics are real-time and platform-verified.
+                           {t('analytics.ba.note')}
                         </p>
                         <button className="flex items-center gap-2 text-black font-black text-[12px] uppercase tracking-widest hover:gap-3 transition-all">
-                           Full Baseline Study <ArrowRight size={16} />
+                           {t('analytics.ba.fullStudy')} <ArrowRight size={16} />
                         </button>
                      </div>
                   </div>

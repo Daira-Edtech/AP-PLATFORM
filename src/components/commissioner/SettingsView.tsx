@@ -9,12 +9,14 @@ import {
   Smartphone, History, AlertTriangle, RefreshCw, Download,
   ExternalLink, X
 } from 'lucide-react';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 const Skeleton = ({ className = '' }: { className?: string }) => (
   <div className={`animate-pulse bg-gray-100 rounded ${className}`} />
 );
 
 const SettingsView: React.FC = () => {
+  const { t } = useLanguage();
   const router = useRouter();
   const [coverageTarget, setCoverageTarget] = useState(80);
   const [escalationThreshold, setEscalationThreshold] = useState(14);
@@ -140,8 +142,8 @@ const SettingsView: React.FC = () => {
         {/* HEADER */}
         <div className="flex justify-between items-end mb-4">
           <div>
-            <h1 className="text-[28px] font-bold text-black tracking-tight mb-1">Profile & Settings</h1>
-            <p className="text-[14px] text-[#888888] font-medium">Manage executive access and statewide operational protocols</p>
+            <h1 className="text-[28px] font-bold text-black tracking-tight mb-1">{t('settings.title')}</h1>
+            <p className="text-[14px] text-[#888888] font-medium">{t('settings.subtitle')}</p>
           </div>
         </div>
 
@@ -154,7 +156,7 @@ const SettingsView: React.FC = () => {
             </div>
           </div>
           <div>
-            <h2 className="text-[22px] font-bold text-black tracking-tight leading-none mb-1">{profile?.name || 'Unknown'}</h2>
+            <h2 className="text-[22px] font-bold text-black tracking-tight leading-none mb-1">{profile?.name || t('settings.profile.unknown')}</h2>
             <p className="text-[14px] text-[#888] font-medium mb-3">
               {roleLabel[profile?.role] || profile?.role}{profile?.stateName && profile.stateName !== 'N/A' ? `, ${profile.stateName}` : ''}
             </p>
@@ -169,31 +171,31 @@ const SettingsView: React.FC = () => {
         <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[#F5F5F5] bg-[#F9F9F9]/30">
             <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-[#888] flex items-center gap-2">
-              <Shield size={16} /> Security & Authentication
+              <Shield size={16} /> {t('settings.security.title')}
             </h3>
           </div>
           <div className="divide-y divide-[#F5F5F5]">
-            <SettingRow icon={<Lock size={18} />} title="Change Password" desc="Update your account password" action="Update" />
+            <SettingRow icon={<Lock size={18} />} title={t('settings.security.changePassword')} desc={t('settings.security.changePasswordDesc')} action={t('settings.security.update')} />
             <div className="flex items-center justify-between p-6 hover:bg-[#FBFBFB] transition-colors">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-gray-50 rounded flex items-center justify-center text-[#888] border border-[#F0F0F0]"><Smartphone size={20} /></div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-bold text-black">Two-Factor Authentication</span>
-                    <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase rounded tracking-widest border border-zinc-200">Managed by Provider</span>
+                    <span className="text-[15px] font-bold text-black">{t('settings.security.2fa')}</span>
+                    <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase rounded tracking-widest border border-zinc-200">{t('settings.security.provider')}</span>
                   </div>
-                  <p className="text-[12px] text-[#888]">Authentication is managed through Supabase Auth</p>
+                  <p className="text-[12px] text-[#888]">{t('settings.security.managedBy')}</p>
                 </div>
               </div>
             </div>
             <SettingRow
               icon={<History size={18} />}
-              title="Account Activity"
+              title={t('settings.security.activity')}
               desc={profile?.lastLoginAt
-                ? `Last login: ${new Date(profile.lastLoginAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} • ${profile.loginCount} total sign-ins`
-                : 'No login history available'
+                ? `${t('settings.security.lastLogin')} ${new Date(profile.lastLoginAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} • ${profile.loginCount} ${t('settings.security.totalLogins')}`
+                : t('settings.security.noLogin')
               }
-              action="View"
+              action={t('settings.security.view')}
             />
           </div>
         </div>
@@ -202,13 +204,13 @@ const SettingsView: React.FC = () => {
         <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[#F5F5F5] bg-[#F9F9F9]/30">
             <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-[#888] flex items-center gap-2">
-              <Settings size={16} /> State Protocols & Thresholds
+              <Settings size={16} /> {t('settings.protocols.title')}
             </h3>
           </div>
           <div className="p-8 space-y-8">
             <div className="grid grid-cols-2 gap-8">
               <div>
-                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-2">State Coverage Target</label>
+                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-2">{t('settings.protocols.coverage')}</label>
                 <div className="flex items-center gap-4">
                   <input
                     type="range" min="50" max="100" value={coverageTarget} onChange={(e) => setCoverageTarget(parseInt(e.target.value))}
@@ -218,7 +220,7 @@ const SettingsView: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-2">Facility Capacity Alert</label>
+                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-2">{t('settings.protocols.capacity')}</label>
                 <div className="flex items-center gap-4">
                   <input
                     type="range" min="70" max="100" value={capacityAlert} onChange={(e) => setCapacityAlert(parseInt(e.target.value))}
@@ -231,23 +233,23 @@ const SettingsView: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-8">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block">District Escalation Limit</label>
+                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block">{t('settings.protocols.escalation')}</label>
                 <div className="relative">
                   <input
                     type="number" value={escalationThreshold} onChange={(e) => setEscalationThreshold(parseInt(e.target.value))}
                     className="w-full h-11 bg-[#F9F9F9] border border-[#E5E5E5] px-4 rounded-lg font-bold text-[14px] outline-none focus:ring-1 focus:ring-black"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-black text-[#AAA] uppercase">Days</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-black text-[#AAA] uppercase">{t('settings.protocols.days')}</span>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block">Referral Overdue Limit</label>
+                <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block">{t('settings.protocols.referral')}</label>
                 <div className="relative">
                   <input
                     type="number" value={referralThreshold} onChange={(e) => setReferralThreshold(parseInt(e.target.value))}
                     className="w-full h-11 bg-[#F9F9F9] border border-[#E5E5E5] px-4 rounded-lg font-bold text-[14px] outline-none focus:ring-1 focus:ring-black"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-black text-[#AAA] uppercase">Days</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-black text-[#AAA] uppercase">{t('settings.protocols.days')}</span>
                 </div>
               </div>
             </div>
@@ -258,8 +260,8 @@ const SettingsView: React.FC = () => {
                   <RefreshCw size={20} />
                 </div>
                 <div>
-                  <span className="text-[14px] font-bold text-black block">National Benchmark Sync</span>
-                  <p className="text-[12px] text-[#888]">Auto-update targets from Central Ministry directive feed</p>
+                  <span className="text-[14px] font-bold text-black block">{t('settings.protocols.sync')}</span>
+                  <p className="text-[12px] text-[#888]">{t('settings.protocols.syncDesc')}</p>
                 </div>
               </div>
               <div
@@ -276,16 +278,16 @@ const SettingsView: React.FC = () => {
         <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[#F5F5F5] bg-[#F9F9F9]/30">
             <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-[#888] flex items-center gap-2">
-              <Bell size={16} /> Alert Preferences
+              <Bell size={16} /> {t('settings.alerts.title')}
             </h3>
           </div>
           <div className="divide-y divide-[#F5F5F5]">
-            <NotificationToggle label="Critical statewide escalations" desc="Email + SMS + In-app Alert" defaultOn={true} />
-            <NotificationToggle label="Weekly state summary report" desc="Every Monday morning (Email)" defaultOn={true} />
-            <NotificationToggle label="District coverage drop alert (<50%)" desc="Immediate In-app Alert" defaultOn={true} />
-            <NotificationToggle label="Diagnostic facility capacity crises" desc="Push Notification" defaultOn={true} />
-            <NotificationToggle label="National directive feed updates" desc="Dashboard Newsflash" defaultOn={false} />
-            <NotificationToggle label="Programme milestone achievements" desc="Periodic Summary" defaultOn={true} />
+            <NotificationToggle label={t('settings.alerts.critical')} desc={t('settings.alerts.criticalDesc')} defaultOn={true} />
+            <NotificationToggle label={t('settings.alerts.weekly')} desc={t('settings.alerts.weeklyDesc')} defaultOn={true} />
+            <NotificationToggle label={t('settings.alerts.coverage')} desc={t('settings.alerts.coverageDesc')} defaultOn={true} />
+            <NotificationToggle label={t('settings.alerts.capacity')} desc={t('settings.alerts.capacityDesc')} defaultOn={true} />
+            <NotificationToggle label={t('settings.alerts.national')} desc={t('settings.alerts.nationalDesc')} defaultOn={false} />
+            <NotificationToggle label={t('settings.alerts.milestone')} desc={t('settings.alerts.milestoneDesc')} defaultOn={true} />
           </div>
         </div>
 
@@ -293,7 +295,7 @@ const SettingsView: React.FC = () => {
         <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[#F5F5F5] bg-[#F9F9F9]/30">
             <h3 className="text-[13px] font-black uppercase tracking-[0.2em] text-[#888] flex items-center gap-2">
-              <Database size={16} /> Data Governance
+              <Database size={16} /> {t('settings.data.title')}
             </h3>
           </div>
           <div className="p-8">
@@ -304,15 +306,15 @@ const SettingsView: React.FC = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-bold text-black">State Data Overview</span>
-                    <span className="text-[10px] font-black text-green-600 uppercase">Live ✓</span>
+                    <span className="text-[14px] font-bold text-black">{t('settings.data.overview')}</span>
+                    <span className="text-[10px] font-black text-green-600 uppercase">{t('settings.data.live')}</span>
                   </div>
                   {dataStats ? (
                     <p className="text-[12px] text-[#888]">
-                      {formatNumber(dataStats.totalChildren)} children • {formatNumber(dataStats.totalProfiles)} workers • {formatNumber(dataStats.totalAwcs)} AWCs • {formatNumber(dataStats.totalSessions)} sessions
+                      {formatNumber(dataStats.totalChildren)} {t('settings.data.children')} • {formatNumber(dataStats.totalProfiles)} {t('settings.data.workers')} • {formatNumber(dataStats.totalAwcs)} {t('settings.data.awcs')} • {formatNumber(dataStats.totalSessions)} {t('settings.data.sessions')}
                     </p>
                   ) : (
-                    <p className="text-[12px] text-[#888]">Loading data statistics...</p>
+                    <p className="text-[12px] text-[#888]">{t('settings.data.loading')}</p>
                   )}
                 </div>
               </div>
@@ -321,7 +323,7 @@ const SettingsView: React.FC = () => {
                 disabled={exporting}
                 className="flex items-center gap-2 px-6 py-2.5 bg-black text-white rounded font-black text-[12px] uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Download size={16} /> {exporting ? 'Exporting...' : 'Export All Data (CSV)'}
+                <Download size={16} /> {exporting ? t('settings.data.exporting') : t('settings.data.export')}
               </button>
             </div>
 
@@ -330,19 +332,19 @@ const SettingsView: React.FC = () => {
               <div className="grid grid-cols-4 gap-3 mb-6">
                 <div className="bg-[#F9F9F9] border border-[#EEE] rounded-lg p-4 text-center">
                   <span className="text-[20px] font-black block">{formatNumber(dataStats.totalChildren)}</span>
-                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">Children</span>
+                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">{t('settings.data.children')}</span>
                 </div>
                 <div className="bg-[#F9F9F9] border border-[#EEE] rounded-lg p-4 text-center">
                   <span className="text-[20px] font-black block">{formatNumber(dataStats.totalProfiles)}</span>
-                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">Workers</span>
+                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">{t('settings.data.workers')}</span>
                 </div>
                 <div className="bg-[#F9F9F9] border border-[#EEE] rounded-lg p-4 text-center">
                   <span className="text-[20px] font-black block">{dataStats.totalAwcs}</span>
-                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">AWCs</span>
+                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">{t('settings.data.awcs')}</span>
                 </div>
                 <div className="bg-[#F9F9F9] border border-[#EEE] rounded-lg p-4 text-center">
                   <span className="text-[20px] font-black block">{formatNumber(dataStats.totalSessions)}</span>
-                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">Sessions</span>
+                  <span className="text-[9px] font-black text-[#888] uppercase tracking-widest">{t('settings.data.sessions')}</span>
                 </div>
               </div>
             )}
@@ -350,7 +352,7 @@ const SettingsView: React.FC = () => {
             <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-lg flex justify-between items-center group cursor-pointer hover:bg-white hover:border-black transition-all">
               <div className="flex items-center gap-3">
                 <ExternalLink size={18} className="text-[#AAA]" />
-                <span className="text-[13px] font-bold text-[#555]">API Access & Documentation</span>
+                <span className="text-[13px] font-bold text-[#555]">{t('settings.data.api')}</span>
               </div>
               <ChevronRight size={16} className="text-[#AAA] group-hover:text-black transition-all" />
             </div>
@@ -364,10 +366,10 @@ const SettingsView: React.FC = () => {
             disabled={signingOut}
             className="flex items-center gap-3 px-12 py-4 bg-red-50 text-red-600 rounded-xl font-black text-[14px] uppercase tracking-[0.2em] hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95 border border-red-100 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <LogOut size={20} /> {signingOut ? 'Signing Out...' : 'Sign Out of State Command'}
+            <LogOut size={20} /> {signingOut ? t('settings.logout.signingOut') : t('settings.logout.btn')}
           </button>
           <p className="text-[11px] font-bold text-[#AAA] uppercase tracking-widest">
-            {profile?.createdAt ? `Account created: ${new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Jiveesha Platform'}
+            {profile?.createdAt ? `${t('settings.logout.created')} ${new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : t('settings.logout.platform')}
           </p>
         </div>
       </div>

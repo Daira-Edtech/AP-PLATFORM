@@ -10,8 +10,10 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { PREVIOUS_BRIEFS, PREVIOUS_REPORTS, EXECUTIVE_KPIS, DISTRICT_MOCK_DATA } from '@/lib/commissioner/constants';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 const BriefsReportsView: React.FC = () => {
+   const { t } = useLanguage();
    const [activeTab, setActiveTab] = useState('Cabinet Briefs');
    const [isGenerating, setIsGenerating] = useState(false);
    const [showPreview, setShowPreview] = useState(false);
@@ -48,21 +50,25 @@ const BriefsReportsView: React.FC = () => {
       <div className="animate-in fade-in duration-700 pb-20">
          <div className="flex justify-between items-end mb-8">
             <div>
-               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Cabinet Briefs & Reports</h1>
-               <p className="text-[14px] text-[#888888] font-medium">Executive summaries and longitudinal data audits for decision makers</p>
+               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('briefs.title')}</h1>
+               <p className="text-[14px] text-[#888888] font-medium">{t('briefs.subtitle')}</p>
             </div>
          </div>
 
          <div className="flex border-b border-[#E5E5E5] mb-8 overflow-x-auto scrollbar-hide">
-            {['Cabinet Briefs', 'Standard Reports', 'Scheduled'].map(tab => (
+            {[
+               { id: 'Cabinet Briefs', label: t('briefs.tab.cabinet') },
+               { id: 'Standard Reports', label: t('briefs.tab.standard') },
+               { id: 'Scheduled', label: t('briefs.tab.scheduled') }
+            ].map(tab => (
                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-8 py-4 text-[13px] font-bold transition-all relative whitespace-nowrap ${activeTab === tab ? 'text-black' : 'text-[#888] hover:text-[#555]'
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-8 py-4 text-[13px] font-bold transition-all relative whitespace-nowrap ${activeTab === tab.id ? 'text-black' : 'text-[#888] hover:text-[#555]'
                      }`}
                >
-                  {tab}
-                  {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black" />}
+                  {tab.label}
+                  {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black" />}
                </button>
             ))}
          </div>
@@ -71,17 +77,17 @@ const BriefsReportsView: React.FC = () => {
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
                {/* BRIEF GENERATOR */}
                <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Generate Cabinet Brief</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('briefs.generate.title')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                      <div className="space-y-6">
                         <div>
-                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">Brief Type</label>
+                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">{t('briefs.generate.type')}</label>
                            <div className="space-y-3">
                               {[
-                                 { id: 'monthly', label: 'Monthly Executive Summary', desc: '1-page high-level overview' },
-                                 { id: 'quarterly', label: 'Quarterly Impact Report', desc: '2-page outcome analysis' },
-                                 { id: 'spotlight', label: 'District Spotlight', desc: 'Deep dive on specific zone' },
-                                 { id: 'crisis', label: 'Crisis Brief', desc: 'Escalation & SAM clusters' },
+                                 { id: 'monthly', label: t('briefs.type.monthly'), desc: t('briefs.desc.monthly') },
+                                 { id: 'quarterly', label: t('briefs.type.quarterly'), desc: t('briefs.desc.quarterly') },
+                                 { id: 'spotlight', label: t('briefs.type.spotlight'), desc: t('briefs.desc.spotlight') },
+                                 { id: 'crisis', label: t('briefs.type.crisis'), desc: t('briefs.desc.crisis') },
                               ].map(type => (
                                  <label key={type.id} className="flex gap-4 cursor-pointer group">
                                     <input type="radio" name="briefType"
@@ -100,7 +106,7 @@ const BriefsReportsView: React.FC = () => {
 
                      <div className="space-y-8">
                         <div>
-                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">Period & Scope</label>
+                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">{t('briefs.generate.period')}</label>
                            <div className="grid grid-cols-2 gap-3">
                               <select className="bg-[#F9F9F9] border border-[#E5E5E5] p-2 rounded font-bold text-[13px] outline-none">
                                  <option>March 2024</option>
@@ -115,7 +121,7 @@ const BriefsReportsView: React.FC = () => {
                            </div>
                         </div>
                         <div>
-                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">Format</label>
+                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">{t('briefs.generate.format')}</label>
                            <div className="flex gap-3">
                               {['PDF Brief', 'Presentation (PPT)', 'Word Doc'].map(f => (
                                  <button key={f} onClick={() => setSelectedFormat(f)} className={`flex-1 py-2 text-[12px] font-bold border rounded ${f === selectedFormat ? 'bg-zinc-50 border-black text-black' : 'bg-white border-[#E5E5E5] text-[#888]'}`}>{f}</button>
@@ -126,19 +132,19 @@ const BriefsReportsView: React.FC = () => {
 
                      <div className="space-y-8">
                         <div>
-                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">Branding & Security</label>
+                           <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-3">{t('briefs.generate.branding')}</label>
                            <div className="space-y-3">
                               <label className="flex items-center gap-3 cursor-pointer">
                                  <input type="checkbox" defaultChecked className="accent-black w-4 h-4" />
-                                 <span className="text-[13px] font-bold text-black">Include government header/seal</span>
+                                 <span className="text-[13px] font-bold text-black">{t('briefs.brand.header')}</span>
                               </label>
                               <label className="flex items-center gap-3 cursor-pointer">
                                  <input type="checkbox" defaultChecked className="accent-black w-4 h-4" />
-                                 <span className="text-[13px] font-bold text-black">Watermark as "CONFIDENTIAL"</span>
+                                 <span className="text-[13px] font-bold text-black">{t('briefs.brand.watermark')}</span>
                               </label>
                               <label className="flex items-center gap-3 cursor-pointer">
                                  <input type="checkbox" className="accent-black w-4 h-4" />
-                                 <span className="text-[13px] font-bold text-black">Email copy to Chief Secretary</span>
+                                 <span className="text-[13px] font-bold text-black">{t('briefs.brand.email')}</span>
                               </label>
                            </div>
                         </div>
@@ -148,7 +154,7 @@ const BriefsReportsView: React.FC = () => {
                            className="w-full h-12 bg-black text-white rounded font-black text-[13px] uppercase tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-3"
                         >
                            {isGenerating ? <Clock className="animate-spin" size={18} /> : <Zap size={18} />}
-                           {isGenerating ? 'Generating Intelligence...' : 'Generate Cabinet Brief'}
+                           {isGenerating ? t('briefs.generating') : t('briefs.generateBtn')}
                         </button>
                      </div>
                   </div>
@@ -165,13 +171,13 @@ const BriefsReportsView: React.FC = () => {
 
                      <div className="flex justify-center gap-4 mt-12">
                         <button onClick={() => handlePrint()} className="px-8 py-3 bg-black text-white rounded-lg font-black text-[14px] uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3">
-                           <Download size={20} /> Download Final PDF
+                           <Download size={20} /> {t('briefs.action.pdf')}
                         </button>
                         <button className="px-6 py-3 border-2 border-black rounded-lg font-black text-[14px] uppercase tracking-widest hover:bg-zinc-50 transition-all flex items-center gap-3 disabled:opacity-50">
-                           <Presentation size={20} /> Download PPTX
+                           <Presentation size={20} /> {t('briefs.action.pptx')}
                         </button>
                         <button className="px-6 py-3 bg-[#F5F5F5] rounded-lg font-black text-[14px] uppercase tracking-widest hover:bg-[#EEE] transition-all flex items-center gap-3 disabled:opacity-50">
-                           <Mail size={20} /> Email Brief
+                           <Mail size={20} /> {t('briefs.action.email')}
                         </button>
                      </div>
                   </div>
@@ -180,22 +186,22 @@ const BriefsReportsView: React.FC = () => {
                {/* PREVIOUS BRIEFS TABLE */}
                <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-[#F5F5F5] flex justify-between items-center bg-[#F9F9F9]/50">
-                     <h3 className="text-[16px] font-black uppercase tracking-tight">Previously Generated Briefs</h3>
+                     <h3 className="text-[16px] font-black uppercase tracking-tight">{t('briefs.previous.title')}</h3>
                      <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#888]" />
-                        <input type="text" placeholder="Search archive..." className="pl-9 pr-4 py-2 border border-[#E5E5E5] rounded text-[12px] outline-none focus:ring-1 focus:ring-black" />
+                        <input type="text" placeholder={t('briefs.previous.search')} className="pl-9 pr-4 py-2 border border-[#E5E5E5] rounded text-[12px] outline-none focus:ring-1 focus:ring-black" />
                      </div>
                   </div>
                   <div className="overflow-x-auto">
                      <table className="w-full text-left">
                         <thead className="bg-[#F9F9F9] text-[10px] font-black uppercase tracking-widest text-[#888] border-b border-[#EEE]">
                            <tr>
-                              <th className="px-8 py-4">Brief Name</th>
-                              <th className="px-4 py-4">Type</th>
-                              <th className="px-4 py-4">Period</th>
-                              <th className="px-4 py-4">Scope</th>
-                              <th className="px-4 py-4">Generated</th>
-                              <th className="px-8 py-4 text-right">Actions</th>
+                              <th className="px-8 py-4">{t('table.briefName')}</th>
+                              <th className="px-4 py-4">{t('table.type')}</th>
+                              <th className="px-4 py-4">{t('table.period')}</th>
+                              <th className="px-4 py-4">{t('table.scope')}</th>
+                              <th className="px-4 py-4">{t('table.generated')}</th>
+                              <th className="px-8 py-4 text-right">{t('table.actions')}</th>
                            </tr>
                         </thead>
                         <tbody className="text-[13px] divide-y divide-[#F5F5F5]">
@@ -229,10 +235,10 @@ const BriefsReportsView: React.FC = () => {
          {activeTab === 'Standard Reports' && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
                <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Standard Report Engine</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('briefs.reports.title')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
                      <div>
-                        <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">Select Report Template</label>
+                        <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">{t('briefs.reports.selectTemp')}</label>
                         <select className="w-full bg-[#F9F9F9] border border-[#E5E5E5] p-3 rounded font-black text-[14px] outline-none">
                            <option>Monthly State Summary</option>
                            <option>Quarterly Performance Audit</option>
@@ -243,7 +249,7 @@ const BriefsReportsView: React.FC = () => {
                         </select>
                      </div>
                      <div>
-                        <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">Included Sections</label>
+                        <label className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-4">{t('briefs.reports.includes')}</label>
                         <div className="grid grid-cols-1 gap-2">
                            {['KPI Dashboard', 'Coverage Analysis', 'Risk Heatmaps', 'Trend Forecasts', 'District Rankings', 'Escalation Logs'].map(s => (
                               <label key={s} className="flex items-center gap-3 cursor-pointer group">
@@ -255,7 +261,7 @@ const BriefsReportsView: React.FC = () => {
                      </div>
                      <div className="flex flex-col justify-end">
                         <button className="w-full h-12 bg-black text-white rounded font-black text-[13px] uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg active:scale-95">
-                           Generate Full Report
+                           {t('briefs.reports.generate')}
                         </button>
                      </div>
                   </div>
@@ -263,18 +269,18 @@ const BriefsReportsView: React.FC = () => {
 
                <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-[#F5F5F5] bg-[#F9F9F9]/50">
-                     <h3 className="text-[16px] font-black uppercase tracking-tight">Recent Standard Reports</h3>
+                     <h3 className="text-[16px] font-black uppercase tracking-tight">{t('briefs.reports.recent')}</h3>
                   </div>
                   <div className="overflow-x-auto">
                      <table className="w-full text-left">
                         <thead className="bg-[#F9F9F9] text-[10px] font-black uppercase tracking-widest text-[#888] border-b border-[#EEE]">
                            <tr>
-                              <th className="px-8 py-4">Report ID</th>
-                              <th className="px-4 py-4">Title</th>
-                              <th className="px-4 py-4 text-center">Type</th>
-                              <th className="px-4 py-4 text-center">Format</th>
-                              <th className="px-4 py-4 text-right">Generated</th>
-                              <th className="px-8 py-4 text-right">Actions</th>
+                              <th className="px-8 py-4">{t('table.reportId')}</th>
+                              <th className="px-4 py-4">{t('table.title')}</th>
+                              <th className="px-4 py-4 text-center">{t('table.type')}</th>
+                              <th className="px-4 py-4 text-center">{t('table.format')}</th>
+                              <th className="px-4 py-4 text-right">{t('table.generated')}</th>
+                              <th className="px-8 py-4 text-right">{t('table.actions')}</th>
                            </tr>
                         </thead>
                         <tbody className="text-[13px] divide-y divide-[#F5F5F5]">
@@ -289,7 +295,7 @@ const BriefsReportsView: React.FC = () => {
                                  <td className="px-4 py-4 text-right text-[#888]">{r.generatedAt}</td>
                                  <td className="px-8 py-4 text-right">
                                     <button className="p-2 hover:bg-zinc-100 rounded transition-colors text-black font-black flex items-center gap-2 ml-auto group-hover:bg-black group-hover:text-white">
-                                       <Download size={16} /> <span className="hidden group-hover:inline">Download</span>
+                                       <Download size={16} /> <span className="hidden group-hover:inline">{t('briefs.reports.download')}</span>
                                     </button>
                                  </td>
                               </tr>
@@ -304,7 +310,7 @@ const BriefsReportsView: React.FC = () => {
          {activeTab === 'Scheduled' && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
                <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Automated Executive Reporting</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('briefs.scheduled.title')}</h3>
                   <div className="space-y-6">
                      {[
                         { title: 'Monthly Brief to Governor\'s Office', last: 'Apr 01', recipient: 'governor.office@ap.gov.in', next: 'May 01' },
@@ -319,14 +325,14 @@ const BriefsReportsView: React.FC = () => {
                               <div>
                                  <h4 className="text-[16px] font-black text-black">{job.title}</h4>
                                  <div className="flex gap-4 mt-1">
-                                    <span className="text-[11px] font-bold text-[#888] uppercase">Next send: <span className="text-black">{job.next}</span></span>
-                                    <span className="text-[11px] font-bold text-[#888] uppercase underline cursor-pointer hover:text-black">Edit Recipients ({job.recipient.split(',').length})</span>
+                                    <span className="text-[11px] font-bold text-[#888] uppercase">{t('briefs.scheduled.nextSend')}: <span className="text-black">{job.next}</span></span>
+                                    <span className="text-[11px] font-bold text-[#888] uppercase underline cursor-pointer hover:text-black">{t('briefs.scheduled.editRecipients')} ({job.recipient.split(',').length})</span>
                                  </div>
                               </div>
                            </div>
                            <div className="flex items-center gap-8">
                               <div className="text-right">
-                                 <span className="text-[10px] font-black text-[#AAA] uppercase block">Last Successful Run</span>
+                                 <span className="text-[10px] font-black text-[#AAA] uppercase block">{t('briefs.scheduled.lastRun')}</span>
                                  <span className="text-[14px] font-black">{job.last}</span>
                               </div>
                               <div className="relative inline-flex items-center cursor-pointer">
@@ -343,13 +349,13 @@ const BriefsReportsView: React.FC = () => {
                   <div className="relative z-10">
                      <h3 className="text-[16px] font-black uppercase tracking-tight mb-4 flex items-center gap-3">
                         <ShieldAlert size={22} className="text-red-500" />
-                        Security Log: Report Access
+                        {t('briefs.security.title')}
                      </h3>
                      <p className="text-[14px] opacity-70 mb-6 max-w-xl leading-relaxed">
-                        All generated briefs and standard reports are tracked via blockchain-verified access logs. Any dissemination outside authorized ministry domains will trigger an immediate administrative audit.
+                        {t('briefs.security.desc')}
                      </p>
                      <button className="text-[12px] font-black uppercase tracking-widest border border-white/20 px-6 py-2 rounded hover:bg-white hover:text-black transition-all">
-                        View Access History
+                        {t('briefs.security.viewLog')}
                      </button>
                   </div>
                   <div className="absolute top-0 right-0 p-8 opacity-10">

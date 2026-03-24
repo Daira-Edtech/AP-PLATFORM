@@ -6,6 +6,7 @@ import {
   ArrowUpDown, X, ChevronLeft, Calendar, User, MapPin,
   AlertTriangle, Send
 } from 'lucide-react';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 interface ChildrenDirectoryProps {
   onChildSelect: (id: string, districtId: string) => void;
@@ -17,6 +18,7 @@ const Skeleton = ({ className = '' }: { className?: string }) => (
 
 const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) => {
   // ═══ STATE ═══
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
   const [filterOptions, setFilterOptions] = useState<any>(null);
@@ -125,17 +127,17 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Children Directory</h1>
+          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('directory.title')}</h1>
           <p className="text-[14px] text-[#888888] font-medium">
-            {summary ? `${(summary.total || 0).toLocaleString()} children across ${summary.districts || 0} districts` : 'Loading...'} • Statewide Registry
+            {summary ? t('directory.subtitle').replace('{count}', (summary.total || 0).toLocaleString()).replace('{districts}', (summary.districts || 0).toString()) : 'Loading...'}
           </p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-            <Download size={16} /> Filtered CSV
+            <Download size={16} /> {t('directory.filteredCsv')}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded text-[13px] font-bold hover:bg-zinc-800">
-            Export Full Registry
+            {t('directory.exportFull')}
           </button>
         </div>
       </div>
@@ -144,7 +146,7 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white border border-[#E5E5E5] p-5 rounded-xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">Screened Status</span>
+            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">{t('directory.stat.screened')}</span>
             <span className="text-[24px] font-black">{stats.screenedPct}%</span>
           </div>
           <div className="w-12 h-12 bg-zinc-50 rounded-full flex items-center justify-center">
@@ -153,7 +155,7 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
         </div>
         <div className="bg-white border border-[#E5E5E5] p-5 rounded-xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">High/Critical Risk</span>
+            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">{t('directory.stat.highRisk')}</span>
             <span className="text-[24px] font-black text-red-600">{stats.highRiskPct}%</span>
           </div>
           <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center">
@@ -162,7 +164,7 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
         </div>
         <div className="bg-white border border-[#E5E5E5] p-5 rounded-xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">Referred to Specialist</span>
+            <span className="text-[11px] font-black text-[#888] uppercase tracking-widest block mb-1">{t('directory.stat.referred')}</span>
             <span className="text-[24px] font-black">{stats.referredPct}%</span>
           </div>
           <div className="w-12 h-12 bg-zinc-50 rounded-full flex items-center justify-center">
@@ -179,7 +181,7 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#888]" />
               <input
                 type="text"
-                placeholder="Search by name or parent..."
+                placeholder={t('directory.search')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full h-12 pl-12 pr-4 bg-[#F9F9F9] border border-[#E5E5E5] rounded-lg text-[14px] focus:ring-1 focus:ring-black focus:bg-white outline-none transition-all"
@@ -189,31 +191,31 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
               onClick={clearFilters}
               className="px-4 h-12 text-[13px] font-bold text-[#888] hover:text-black transition-colors flex items-center gap-2"
             >
-              <X size={16} /> Clear all
+              <X size={16} /> {t('directory.clearAll')}
             </button>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <FilterDropdown
-              label="District"
+              label={t('directory.filter.district')}
               value={filters.district}
               options={(filterOptions?.districts || []).map((d: any) => ({ value: d.id, label: d.name }))}
               onChange={(v) => setFilters({ ...filters, district: v })}
             />
             <FilterDropdown
-              label="Risk Level"
+              label={t('directory.filter.risk')}
               value={filters.risk}
               options={['Low', 'Medium', 'High', 'Critical'].map(r => ({ value: r, label: r }))}
               onChange={(v) => setFilters({ ...filters, risk: v })}
             />
             <FilterDropdown
-              label="Status"
+              label={t('directory.filter.status')}
               value={filters.status}
               options={['Screened', 'Unscreened', 'In Intervention'].map(s => ({ value: s, label: s }))}
               onChange={(v) => setFilters({ ...filters, status: v })}
             />
             <FilterDropdown
-              label="Age Range"
+              label={t('directory.filter.age')}
               value={filters.age}
               options={['0-1 yr', '1-2 yr', '2-3 yr', '3-4 yr', '4-5 yr', '5-6 yr'].map(a => ({ value: a, label: a }))}
               onChange={(v) => setFilters({ ...filters, age: v })}
@@ -223,9 +225,11 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
       </div>
 
       <div className="flex justify-between items-center mb-4 px-1">
-        <span className="text-[13px] font-bold text-[#888]">Showing <span className="text-black">{children.length}</span> of <span className="text-black">{total.toLocaleString()}</span> results</span>
+        <span className="text-[13px] font-bold text-[#888]">
+            {t('directory.showing')} <span className="text-black">{children.length}</span> {t('directory.of')} <span className="text-black">{total.toLocaleString()}</span> {t('directory.results')}
+        </span>
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[#888] font-medium">Page {page} of {totalPages.toLocaleString()}</span>
+          <span className="text-[12px] text-[#888] font-medium">{t('directory.page')} {page} {t('directory.of')} {totalPages.toLocaleString()}</span>
           <div className="flex gap-1">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -258,15 +262,15 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
                 <tr className="bg-[#F9F9F9] border-b border-[#EEE] text-[10px] font-black uppercase tracking-widest text-[#888]">
                   <th className="px-6 py-4">#</th>
                   <th className="px-4 py-4 min-w-[180px]">
-                    <div className="flex items-center gap-2">Name / ID <ArrowUpDown size={12} className="cursor-pointer" /></div>
+                    <div className="flex items-center gap-2">{t('table.nameId')} <ArrowUpDown size={12} className="cursor-pointer" /></div>
                   </th>
-                  <th className="px-4 py-4">Age / Gender</th>
-                  <th className="px-4 py-4">Location (AWC / Mandal)</th>
-                  <th className="px-4 py-4">District</th>
-                  <th className="px-4 py-4 text-center">Risk</th>
-                  <th className="px-4 py-4 text-center">Flags</th>
-                  <th className="px-4 py-4 text-center">Referrals</th>
-                  <th className="px-6 py-4 text-right">Last Activity</th>
+                  <th className="px-4 py-4">{t('table.ageGender')}</th>
+                  <th className="px-4 py-4">{t('table.location')}</th>
+                  <th className="px-4 py-4">{t('table.district')}</th>
+                  <th className="px-4 py-4 text-center">{t('table.risk')}</th>
+                  <th className="px-4 py-4 text-center">{t('table.flags')}</th>
+                  <th className="px-4 py-4 text-center">{t('table.referrals')}</th>
+                  <th className="px-6 py-4 text-right">{t('table.lastActivity')}</th>
                 </tr>
               </thead>
               <tbody className="text-[13px] divide-y divide-[#F5F5F5]">
@@ -329,7 +333,7 @@ const ChildrenDirectory: React.FC<ChildrenDirectoryProps> = ({ onChildSelect }) 
             </table>
           ) : (
             <div className="py-16 text-center text-[#888] text-[13px]">
-              {total === 0 ? 'No children registered in this state yet.' : 'No children matching your filters.'}
+              {total === 0 ? t('directory.noChildren') : t('directory.noMatch')}
             </div>
           )}
         </div>
@@ -343,18 +347,21 @@ const FilterDropdown: React.FC<{
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
-}> = ({ label, value, options, onChange }) => (
-  <div className="flex flex-col gap-1.5">
-    <span className="text-[10px] font-black text-[#888] uppercase tracking-widest pl-1">{label}</span>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-[#F9F9F9] border border-[#E5E5E5] px-3 py-2 rounded font-bold text-[12px] text-black focus:bg-white focus:ring-1 focus:ring-black outline-none cursor-pointer hover:border-[#CCC] transition-all"
-    >
-      <option value="">All {label}s</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  </div>
-);
+}> = ({ label, value, options, onChange }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] font-black text-[#888] uppercase tracking-widest pl-1">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-[#F9F9F9] border border-[#E5E5E5] px-3 py-2 rounded font-bold text-[12px] text-black focus:bg-white focus:ring-1 focus:ring-black outline-none cursor-pointer hover:border-[#CCC] transition-all"
+      >
+        <option value="">{t('directory.allLabel')} {label}s</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+};
 
 export default ChildrenDirectory;

@@ -73,6 +73,31 @@ The Jiveesha ECD Platform empowers Anganwadi Workers (AWW), supervisors, and sta
    npm run dev
    ```
 
+## 🔑 Portal Login Credentials
+
+### Super Admin Portal (`/admin`)
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@jiveesha.com` | `password123` | Super Admin |
+| `system@jiveesha.com` | `password123` | System Admin |
+
+### Commissioner Portal (`/commissioner`)
+| Email | Password | Role |
+|-------|----------|------|
+| `commissioner@jiveesha.com` | `password123` | Commissioner |
+
+### DPO Portal (`/dpo`)
+| Email | Password | Role |
+|-------|----------|------|
+| `dpo@jiveesha.com` | `password123` | District Officer |
+
+### CDPO Portal (`/cdpo`)
+| Email | Password | Role |
+|-------|----------|------|
+| `cdpo@jiveesha.com` | `password123` | CDPO |
+
+> **Note:** Run `npm run seed:admins` to create the admin users. For Commissioner, DPO, and CDPO accounts, create them via the Admin Portal or update the seed script.
+
 ## 🏗️ Project Structure
 
 ```text

@@ -73,6 +73,7 @@ export interface RiskAnalysisStats {
     domainHeatmap: { domain: string; scores: number[] }[];
     highRiskChildren: {
         id: string;
+        shortId: string;
         name: string;
         age: string;
         awc: string;
@@ -185,6 +186,7 @@ export interface DpoScreeningStats {
     domainHeatmap: { domain: string; scores: number[] }[];
     highRiskChildren: {
         id: string;
+        shortId: string;
         name: string;
         age: string;
         awc: string;
@@ -207,4 +209,51 @@ export interface DpoWorkforceData {
     cdpoOfficers: { name: string; cdpo: string; mandals: number; escalations: number; reports: number; lastLogin: string; status: string }[];
     heatmapRows: string[];
     heatmapWeeks: string[];
+}
+
+export interface ChildDetailData {
+    id: string;
+    name: string;
+    dob: string;
+    age: string;
+    gender: string;
+    guardianName: string;
+    contactNo: string;
+    mandalName: string;
+    awcName: string;
+    currentRisk: string;
+    recentObservation?: {
+        text?: string;
+        by?: string;
+        date?: string;
+    };
+    vitals?: {
+        height: number;
+        weight: number;
+        muac: number;
+        status: string;
+    };
+    screenings: {
+        id: string;
+        date: string;
+        level: string;
+        by: string;
+        status: string;
+        scores: Record<string, number>;
+    }[];
+    flags: {
+        id: string;
+        title: string;
+        status: string;
+        priority: string;
+        date: string;
+        raisedBy: string;
+    }[];
+    referrals: {
+        id: string;
+        type: string;
+        status: string;
+        date: string;
+        referredBy: string;
+    }[];
 }

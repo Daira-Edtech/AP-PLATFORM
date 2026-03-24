@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getRoleDashboard } from '@/lib/roles'
@@ -53,8 +54,8 @@ function LoginForm() {
 
             router.push(dashboard)
             router.refresh()
-        } catch (err: any) {
-            setError(err.message || 'Failed to sign in')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to sign in')
         } finally {
             setLoading(false)
         }
@@ -63,11 +64,22 @@ function LoginForm() {
     return (
         <div className="flex min-h-screen font-sans">
             {/* Left Side - Hero/Info */}
-            <div className="hidden lg:flex w-1/2 bg-black flex-col justify-between p-12 text-white">
+            {/* Darkest Lavender: <div className="hidden lg:flex w-1/2 bg-[#1E1448] flex-col justify-between p-12 text-white"> */}
+            {/* Medium Lavender: <div className="hidden lg:flex w-1/2 bg-[#9B8EC4] flex-col justify-between p-12 text-white"> */}
+            <div className="hidden lg:flex w-1/2 bg-[#e5e3f1] flex-col justify-between p-12 text-[#3B2D8A]">
                 <div>
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-bold text-sm rounded">J</div>
-                        <span className="text-lg font-bold tracking-tight">Jiveesha ECD Platform</span>
+                    <div className="flex flex-col items-start gap-1">
+                        <Image 
+                            src="/logo.png" 
+                            alt="Jiveesha Logo" 
+                            width={400} 
+                            height={150} 
+                            className="w-auto h-20 lg:h-32 object-contain -ml-6 lg:-ml-10" 
+                            priority 
+                        />
+                        <span className="text-xl lg:text-2xl font-semibold tracking-wide drop-shadow-sm text-[#3B2D8A]/80">
+                            Early Childhood Development
+                        </span>
                     </div>
 
                     <div className="mt-24 max-w-md">
@@ -143,7 +155,7 @@ function LoginForm() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-black text-white rounded-lg py-3.5 text-sm font-bold hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+                            className="w-full bg-[#e5e3f1] text-[#3B2D8A] rounded-lg py-3.5 text-sm font-extrabold hover:bg-[#d6d4e5] transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
                         >
                             {loading ? 'Authenticating...' : 'Sign In'}
                         </button>
@@ -178,8 +190,8 @@ function LoginForm() {
 export default function LoginPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-black flex items-center justify-center">
-                <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-bold text-sm rounded animate-pulse">J</div>
+            <div className="min-h-screen bg-[#1E1448] flex items-center justify-center">
+                <Image src="/logo.png" alt="Logo" width={32} height={32} className="rounded animate-pulse" priority />
             </div>
         }>
             <LoginForm />

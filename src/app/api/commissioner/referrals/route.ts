@@ -2,7 +2,20 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
-async function getStateScope(adminSb: ReturnType<typeof createAdminClient>) {
+// Cache for state scope data (AWC IDs, district info)
+const scopeCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL = 60000 // 60 seconds
+
+interface StateScope {
+    stateId: string
+    districts: { id: string; name: string }[]
+    districtIds: string[]
+    mandalIds: string[]
+    awcIds: string[]
+    childIds: string[]
+}
+
+async function getStateScope(adminSb: ReturnType<typeof createAdminClient>): Promise<StateScope | null> {
     const userSb = await createClient()
     const { data: { user } } = await userSb.auth.getUser()
     if (!user) return null
@@ -11,22 +24,48 @@ async function getStateScope(adminSb: ReturnType<typeof createAdminClient>) {
     if (!profile?.state_id) return null
 
     const stateId = profile.state_id
+
+    // Check cache
+    const cached = scopeCache.get(stateId)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return cached.data
+    }
+
+    // Fetch scope data in parallel
     const { data: districts } = await adminSb.from('districts').select('id, name').eq('state_id', stateId)
     const districtIds = districts?.map((d: any) => d.id) || []
+
+    if (districtIds.length === 0) {
+        const emptyScope = { stateId, districts: [], districtIds: [], mandalIds: [], awcIds: [], childIds: [] }
+        scopeCache.set(stateId, { data: emptyScope, timestamp: Date.now() })
+        return emptyScope
+    }
 
     const { data: mandals } = await adminSb.from('mandals').select('id').in('district_id', districtIds)
     const mandalIds = mandals?.map((m: any) => m.id) || []
 
-    const { data: awcs } = await adminSb.from('awcs').select('id').in('mandal_id', mandalIds)
+    if (mandalIds.length === 0) {
+        const emptyScope = { stateId, districts: districts || [], districtIds, mandalIds: [], awcIds: [], childIds: [] }
+        scopeCache.set(stateId, { data: emptyScope, timestamp: Date.now() })
+        return emptyScope
+    }
+
+    const { data: awcs } = await adminSb.from('awcs').select('id').in('mandal_id', mandalIds).eq('is_active', true)
     const awcIds = awcs?.map((a: any) => a.id) || []
 
-    return { stateId, districts: districts || [], districtIds, mandalIds, awcIds }
-}
+    if (awcIds.length === 0) {
+        const emptyScope = { stateId, districts: districts || [], districtIds, mandalIds, awcIds: [], childIds: [] }
+        scopeCache.set(stateId, { data: emptyScope, timestamp: Date.now() })
+        return emptyScope
+    }
 
-async function getStateChildIds(adminSb: ReturnType<typeof createAdminClient>, awcIds: string[]) {
-    if (awcIds.length === 0) return []
-    const { data } = await adminSb.from('children').select('id').in('awc_id', awcIds)
-    return data?.map((c: any) => c.id) || []
+    // Fetch all children IDs at once
+    const { data: children } = await adminSb.from('children').select('id').in('awc_id', awcIds).eq('is_active', true)
+    const childIds = children?.map((c: any) => c.id) || []
+
+    const scope = { stateId, districts: districts || [], districtIds, mandalIds, awcIds, childIds }
+    scopeCache.set(stateId, { data: scope, timestamp: Date.now() })
+    return scope
 }
 
 export async function GET(request: Request) {
@@ -38,116 +77,107 @@ export async function GET(request: Request) {
         const scope = await getStateScope(adminSb)
         if (!scope) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        const { districts, districtIds, awcIds } = scope
-        const childIds = await getStateChildIds(adminSb, awcIds)
+        const { districts, districtIds, awcIds, childIds, mandalIds } = scope
+
+        if (childIds.length === 0) {
+            // Return empty results immediately
+            switch (type) {
+                case 'kpis': return NextResponse.json({ total: 0, active: 0, scheduled: 0, completed: 0, overdue: 0, avgWait: 0 })
+                case 'pipeline': return NextResponse.json([])
+                case 'by-specialist': return NextResponse.json([])
+                case 'by-district': return NextResponse.json([])
+                case 'trends': return NextResponse.json([])
+                case 'facility-grid': return NextResponse.json({ grid: [], totalNodes: 0, atCapacity: 0 })
+                case 'overdue': return NextResponse.json([])
+                default: return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 })
+            }
+        }
 
         switch (type) {
-            // ═══════════════════════════════════════════════════════
-            // KPIs
-            // ═══════════════════════════════════════════════════════
             case 'kpis': {
-                if (childIds.length === 0) {
-                    return NextResponse.json({ total: 0, active: 0, scheduled: 0, completed: 0, overdue: 0, avgWait: 0 })
-                }
-
-                const [totalRes, activeRes, scheduledRes, completedRes] = await Promise.all([
-                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds),
-                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).in('status', ['created', 'informed']),
-                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'scheduled'),
-                    adminSb.from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds).eq('status', 'completed'),
-                ])
-
-                // Overdue: follow_up_date passed and not completed/cancelled
-                const now = new Date().toISOString().split('T')[0]
-                const { count: overdueCount } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
+                // Fetch all referrals once and aggregate in memory
+                const { data: refs } = await adminSb
+                    .from('referrals')
+                    .select('status, follow_up_date, created_at, completed_at')
                     .in('child_id', childIds)
-                    .not('status', 'in', '("completed","cancelled")')
-                    .lt('follow_up_date', now)
 
-                // Avg wait time
-                const { data: completedRefs } = await adminSb
-                    .from('referrals').select('created_at, completed_at')
-                    .in('child_id', childIds).eq('status', 'completed')
-                    .not('completed_at', 'is', null)
+                const now = new Date()
+                const nowStr = now.toISOString().split('T')[0]
+                let total = 0, active = 0, scheduled = 0, completed = 0, overdue = 0
+                let totalWaitDays = 0, completedCount = 0
 
-                let avgWait = 0
-                if (completedRefs?.length) {
-                    const totalDays = completedRefs.reduce((sum: number, r: any) => {
-                        return sum + (new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24)
-                    }, 0)
-                    avgWait = Math.round(totalDays / completedRefs.length)
-                }
+                ;(refs || []).forEach((r: any) => {
+                    total++
+                    if (r.status === 'completed') {
+                        completed++
+                        if (r.completed_at && r.created_at) {
+                            totalWaitDays += (new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24)
+                            completedCount++
+                        }
+                    } else if (r.status === 'scheduled') {
+                        scheduled++
+                    } else if (r.status === 'created' || r.status === 'informed') {
+                        active++
+                    }
+
+                    if (r.follow_up_date && r.follow_up_date < nowStr && r.status !== 'completed' && r.status !== 'cancelled') {
+                        overdue++
+                    }
+                })
 
                 return NextResponse.json({
-                    total: totalRes.count || 0,
-                    active: activeRes.count || 0,
-                    scheduled: scheduledRes.count || 0,
-                    completed: completedRes.count || 0,
-                    overdue: overdueCount || 0,
-                    avgWait
+                    total,
+                    active,
+                    scheduled,
+                    completed,
+                    overdue,
+                    avgWait: completedCount > 0 ? Math.round(totalWaitDays / completedCount) : 0
                 })
             }
 
-            // ═══════════════════════════════════════════════════════
-            // PIPELINE FUNNEL
-            // ═══════════════════════════════════════════════════════
             case 'pipeline': {
-                if (childIds.length === 0) return NextResponse.json([])
-
-                const { count: generated } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true }).in('child_id', childIds)
-
-                const { count: sent } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds).not('status', 'eq', 'created')
-
-                const { count: scheduled } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
+                // Single query + memory aggregation
+                const { data: refs } = await adminSb
+                    .from('referrals')
+                    .select('status, created_at, completed_at')
                     .in('child_id', childIds)
-                    .in('status', ['scheduled', 'visited', 'results_received', 'completed'])
 
-                const { count: completed } = await adminSb
-                    .from('referrals').select('*', { count: 'exact', head: true })
-                    .in('child_id', childIds).eq('status', 'completed')
+                let generated = 0, sent = 0, scheduled = 0, completed = 0
+                let totalDays = 0, completedWithDates = 0
 
-                const g = generated || 0, s = sent || 0, sc = scheduled || 0, c = completed || 0
-                const steps = [
-                    { label: 'GENERATED', value: g, pct: '100%', time: 'Day 0' },
-                    { label: 'SENT', value: s, pct: g > 0 ? `${Math.round((s / g) * 100)}%` : '0%', time: '' },
-                    { label: 'SCHEDULED', value: sc, pct: g > 0 ? `${Math.round((sc / g) * 100)}%` : '0%', time: '' },
-                    { label: 'COMPLETED', value: c, pct: g > 0 ? `${Math.round((c / g) * 100)}%` : '0%', time: '' },
-                ]
+                ;(refs || []).forEach((r: any) => {
+                    generated++
+                    if (r.status !== 'created') sent++
+                    if (['scheduled', 'visited', 'results_received', 'completed'].includes(r.status)) scheduled++
+                    if (r.status === 'completed') {
+                        completed++
+                        if (r.completed_at && r.created_at) {
+                            totalDays += (new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24)
+                            completedWithDates++
+                        }
+                    }
+                })
 
-                // Compute avg time between stages for completed referrals
-                const { data: timeData } = await adminSb
-                    .from('referrals').select('created_at, completed_at')
-                    .in('child_id', childIds).eq('status', 'completed').not('completed_at', 'is', null).limit(100)
+                const avgDays = completedWithDates > 0 ? Math.round(totalDays / completedWithDates) : 0
 
-                if (timeData?.length) {
-                    const avgDays = timeData.reduce((sum: number, r: any) => {
-                        return sum + (new Date(r.completed_at).getTime() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24)
-                    }, 0) / timeData.length
-                    steps[3].time = `+${Math.round(avgDays)} Days`
-                }
-
-                return NextResponse.json(steps)
+                return NextResponse.json([
+                    { label: 'GENERATED', value: generated, pct: '100%', time: 'Day 0' },
+                    { label: 'SENT', value: sent, pct: generated > 0 ? `${Math.round((sent / generated) * 100)}%` : '0%', time: '' },
+                    { label: 'SCHEDULED', value: scheduled, pct: generated > 0 ? `${Math.round((scheduled / generated) * 100)}%` : '0%', time: '' },
+                    { label: 'COMPLETED', value: completed, pct: generated > 0 ? `${Math.round((completed / generated) * 100)}%` : '0%', time: avgDays > 0 ? `+${avgDays} Days` : '' },
+                ])
             }
 
-            // ═══════════════════════════════════════════════════════
-            // BY SPECIALIST TYPE
-            // ═══════════════════════════════════════════════════════
             case 'by-specialist': {
-                if (childIds.length === 0) return NextResponse.json([])
-
                 const { data: refs } = await adminSb
-                    .from('referrals').select('referral_type, status, follow_up_date')
+                    .from('referrals')
+                    .select('referral_type, status, follow_up_date')
                     .in('child_id', childIds)
 
                 const now = new Date()
                 const typeMap: Record<string, { active: number; completed: number; overdue: number }> = {}
 
-                refs?.forEach((r: any) => {
+                ;(refs || []).forEach((r: any) => {
                     const t = r.referral_type || 'other'
                     if (!typeMap[t]) typeMap[t] = { active: 0, completed: 0, overdue: 0 }
 
@@ -160,40 +190,44 @@ export async function GET(request: Request) {
                     }
                 })
 
-                const result = Object.entries(typeMap)
-                    .map(([name, counts]) => ({
-                        name: name.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
-                        ...counts
-                    }))
-                    .sort((a, b) => (b.active + b.completed + b.overdue) - (a.active + a.completed + a.overdue))
-
-                return NextResponse.json(result)
+                return NextResponse.json(
+                    Object.entries(typeMap)
+                        .map(([name, counts]) => ({
+                            name: name.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                            ...counts
+                        }))
+                        .sort((a, b) => (b.active + b.completed + b.overdue) - (a.active + a.completed + a.overdue))
+                )
             }
 
-            // ═══════════════════════════════════════════════════════
-            // BY DISTRICT
-            // ═══════════════════════════════════════════════════════
             case 'by-district': {
-                if (childIds.length === 0) return NextResponse.json([])
+                // Fetch children with AWC in single query
+                const { data: stateChildren } = await adminSb
+                    .from('children')
+                    .select('id, awc_id')
+                    .in('awc_id', awcIds)
+                    .eq('is_active', true)
 
-                // Build child → AWC → mandal → district mapping
-                const { data: stateChildren } = await adminSb.from('children').select('id, awc_id').in('awc_id', awcIds)
-                const childToAwc = new Map(stateChildren?.map((c: any) => [c.id, c.awc_id]) || [])
+                const childToAwc = new Map((stateChildren || []).map((c: any) => [c.id, c.awc_id]))
 
-                const { data: awcList } = await adminSb.from('awcs').select('id, mandal_id').in('id', awcIds)
-                const { data: mandalList } = await adminSb.from('mandals').select('id, district_id').in('id', scope.mandalIds)
-                const awcToMandal = new Map(awcList?.map((a: any) => [a.id, a.mandal_id]) || [])
-                const mandalToDistrict = new Map(mandalList?.map((m: any) => [m.id, m.district_id]) || [])
-                const districtNameMap = new Map(districts.map(d => [d.id, d.name]))
+                // Fetch AWC→mandal and mandal→district mappings
+                const [awcRes, mandalRes] = await Promise.all([
+                    adminSb.from('awcs').select('id, mandal_id').in('id', awcIds),
+                    adminSb.from('mandals').select('id, district_id').in('id', mandalIds)
+                ])
+
+                const awcToMandal = new Map((awcRes.data || []).map((a: any) => [a.id, a.mandal_id]))
+                const mandalToDistrict = new Map((mandalRes.data || []).map((m: any) => [m.id, m.district_id]))
 
                 const { data: refs } = await adminSb
-                    .from('referrals').select('child_id, status')
+                    .from('referrals')
+                    .select('child_id, status')
                     .in('child_id', childIds)
 
                 const distData: Record<string, { name: string; active: number; completed: number }> = {}
                 districts.forEach(d => { distData[d.id] = { name: d.name, active: 0, completed: 0 } })
 
-                refs?.forEach((r: any) => {
+                ;(refs || []).forEach((r: any) => {
                     const awcId = childToAwc.get(r.child_id)
                     const mandalId = awcId ? awcToMandal.get(awcId) : null
                     const distId = mandalId ? mandalToDistrict.get(mandalId) : null
@@ -206,17 +240,13 @@ export async function GET(request: Request) {
                 return NextResponse.json(Object.values(distData).filter(d => d.active > 0 || d.completed > 0))
             }
 
-            // ═══════════════════════════════════════════════════════
-            // MONTHLY TRENDS
-            // ═══════════════════════════════════════════════════════
             case 'trends': {
-                if (childIds.length === 0) return NextResponse.json([])
-
                 const twelveMonthsAgo = new Date()
                 twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
 
                 const { data: refs } = await adminSb
-                    .from('referrals').select('created_at, completed_at, status')
+                    .from('referrals')
+                    .select('created_at, completed_at, status')
                     .in('child_id', childIds)
                     .gte('created_at', twelveMonthsAgo.toISOString())
 
@@ -229,7 +259,7 @@ export async function GET(request: Request) {
 
                 const data = months.map(m => ({ month: m, generated: 0, completed: 0, rate: 0 }))
 
-                refs?.forEach((r: any) => {
+                ;(refs || []).forEach((r: any) => {
                     const createdMonth = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short' })
                     const genEntry = data.find(d => d.month === createdMonth)
                     if (genEntry) genEntry.generated++
@@ -248,47 +278,44 @@ export async function GET(request: Request) {
                 return NextResponse.json(data)
             }
 
-            // ═══════════════════════════════════════════════════════
-            // FACILITY GRID
-            // ═══════════════════════════════════════════════════════
             case 'facility-grid': {
-                const { data: facilities } = await adminSb
-                    .from('referral_directory')
-                    .select('id, name, type, specialties, district_id, accepts_referrals, is_active')
-                    .in('district_id', districtIds)
-                    .eq('is_active', true)
+                const [facilitiesRes, refsRes] = await Promise.all([
+                    adminSb
+                        .from('referral_directory')
+                        .select('id, name, type, district_id')
+                        .in('district_id', districtIds)
+                        .eq('is_active', true),
+                    adminSb
+                        .from('referrals')
+                        .select('referral_directory_id')
+                        .in('child_id', childIds)
+                        .not('status', 'in', '("completed","cancelled")')
+                ])
 
-                if (!facilities?.length) {
+                const facilities = facilitiesRes.data || []
+                if (facilities.length === 0) {
                     return NextResponse.json({ grid: [], totalNodes: 0, atCapacity: 0 })
                 }
 
-                const facilityTypes = ['DEIC', 'district_hospital', 'PHC', 'CHC', 'therapy_center', 'private_hospital', 'special_school']
-                const districtNameMap = new Map(districts.map(d => [d.id, d.name]))
-
-                // Count referrals per facility to estimate load
-                const { data: refsByDir } = await adminSb
-                    .from('referrals').select('referral_directory_id')
-                    .in('child_id', childIds)
-                    .not('status', 'in', '("completed","cancelled")')
-
                 const loadMap = new Map<string, number>()
-                refsByDir?.forEach((r: any) => {
+                ;(refsRes.data || []).forEach((r: any) => {
                     if (r.referral_directory_id) {
                         loadMap.set(r.referral_directory_id, (loadMap.get(r.referral_directory_id) || 0) + 1)
                     }
                 })
 
-                // Build grid: district × facility type
+                const facilityTypes = ['DEIC', 'district_hospital', 'PHC', 'CHC', 'therapy_center', 'private_hospital', 'special_school']
+
                 const grid = districts.map(d => {
-                    const distFacilities = facilities.filter(f => f.district_id === d.id)
+                    const distFacilities = facilities.filter((f: any) => f.district_id === d.id)
                     const statuses: Record<string, string> = {}
 
                     facilityTypes.forEach(ft => {
-                        const matching = distFacilities.filter(f => f.type === ft)
+                        const matching = distFacilities.filter((f: any) => f.type === ft)
                         if (matching.length === 0) {
                             statuses[ft] = 'None'
                         } else {
-                            const totalLoad = matching.reduce((sum, f) => sum + (loadMap.get(f.id) || 0), 0)
+                            const totalLoad = matching.reduce((sum: number, f: any) => sum + (loadMap.get(f.id) || 0), 0)
                             const avgLoad = totalLoad / matching.length
                             if (avgLoad > 20) statuses[ft] = 'Capacity'
                             else if (avgLoad > 10) statuses[ft] = 'Limited'
@@ -299,24 +326,19 @@ export async function GET(request: Request) {
                     return { districtId: d.id, districtName: d.name, statuses }
                 })
 
-                const totalNodes = facilities.length
-                const atCapacity = grid.reduce((sum, row) => {
-                    return sum + Object.values(row.statuses).filter(s => s === 'Capacity').length
-                }, 0)
-
-                return NextResponse.json({ grid, totalNodes, atCapacity, facilityTypes })
+                return NextResponse.json({
+                    grid,
+                    totalNodes: facilities.length,
+                    atCapacity: grid.reduce((sum, row) => sum + Object.values(row.statuses).filter(s => s === 'Capacity').length, 0),
+                    facilityTypes
+                })
             }
 
-            // ═══════════════════════════════════════════════════════
-            // OVERDUE REFERRALS TABLE
-            // ═══════════════════════════════════════════════════════
             case 'overdue': {
-                if (childIds.length === 0) return NextResponse.json([])
-
                 const now = new Date().toISOString().split('T')[0]
                 const { data: overdueRefs } = await adminSb
                     .from('referrals')
-                    .select('id, child_id, referral_type, status, follow_up_date, created_at')
+                    .select('id, child_id, referral_type, status, follow_up_date')
                     .in('child_id', childIds)
                     .not('status', 'in', '("completed","cancelled")')
                     .lt('follow_up_date', now)
@@ -325,32 +347,30 @@ export async function GET(request: Request) {
 
                 if (!overdueRefs?.length) return NextResponse.json([])
 
-                // Get child details
-                const overdueChildIds = overdueRefs.map(r => r.child_id)
-                const { data: childDetails } = await adminSb
-                    .from('children').select('id, name, awc_id')
-                    .in('id', overdueChildIds)
+                const overdueChildIds = [...new Set(overdueRefs.map(r => r.child_id))]
 
-                // Build child → district name mapping
-                const childAwcMap = new Map(childDetails?.map((c: any) => [c.id, c.awc_id]) || [])
-                const { data: awcList } = await adminSb.from('awcs').select('id, mandal_id').in('id', [...new Set(childDetails?.map((c: any) => c.awc_id) || [])])
-                const { data: mandalList } = await adminSb.from('mandals').select('id, district_id').in('id', awcList?.map((a: any) => a.mandal_id) || [])
-                const awcToMandal = new Map(awcList?.map((a: any) => [a.id, a.mandal_id]) || [])
-                const mandalToDistrict = new Map(mandalList?.map((m: any) => [m.id, m.district_id]) || [])
+                // Fetch child details and location mappings in parallel
+                const [childRes, awcRes, mandalRes] = await Promise.all([
+                    adminSb.from('children').select('id, name, awc_id').in('id', overdueChildIds),
+                    adminSb.from('awcs').select('id, mandal_id').in('id', awcIds),
+                    adminSb.from('mandals').select('id, district_id').in('id', mandalIds)
+                ])
+
+                const childMap = new Map((childRes.data || []).map((c: any) => [c.id, { name: c.name, awcId: c.awc_id }]))
+                const awcToMandal = new Map((awcRes.data || []).map((a: any) => [a.id, a.mandal_id]))
+                const mandalToDistrict = new Map((mandalRes.data || []).map((m: any) => [m.id, m.district_id]))
                 const districtNameMap = new Map(districts.map(d => [d.id, d.name]))
-                const childNameMap = new Map(childDetails?.map((c: any) => [c.id, c.name]) || [])
 
                 const result = overdueRefs.map(r => {
-                    const awcId = childAwcMap.get(r.child_id)
-                    const mandalId = awcId ? awcToMandal.get(awcId) : null
+                    const child = childMap.get(r.child_id)
+                    const mandalId = child?.awcId ? awcToMandal.get(child.awcId) : null
                     const distId = mandalId ? mandalToDistrict.get(mandalId) : null
-                    const distName = distId ? districtNameMap.get(distId) : 'Unknown'
                     const daysOverdue = Math.round((Date.now() - new Date(r.follow_up_date).getTime()) / (1000 * 60 * 60 * 24))
 
                     return {
                         id: r.id.slice(0, 8).toUpperCase(),
-                        childName: childNameMap.get(r.child_id) || 'Unknown',
-                        district: distName,
+                        childName: child?.name || 'Unknown',
+                        district: distId ? districtNameMap.get(distId) : 'Unknown',
                         type: (r.referral_type || 'other').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
                         daysOverdue,
                         status: r.status === 'scheduled' ? 'Scheduled' : 'Active'

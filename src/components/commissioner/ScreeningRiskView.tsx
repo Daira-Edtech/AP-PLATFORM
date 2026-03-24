@@ -8,6 +8,7 @@ import {
 import { Download, AlertCircle, TrendingUp, Info, ChevronRight, Filter } from 'lucide-react';
 import { KPI } from '@/lib/commissioner/types';
 import KPICard from '@/components/commissioner/KPICard';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 // Loading skeleton
 const Skeleton = ({ className = '' }: { className?: string }) => (
@@ -17,8 +18,14 @@ const Skeleton = ({ className = '' }: { className?: string }) => (
 const ScreeningRiskView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Coverage');
   const [timeFilter, setTimeFilter] = useState('Financial Year');
+  const { t } = useLanguage();
 
-  const tabs = ['Coverage', 'Risk Distribution', 'Trends', 'Conditions'];
+  const tabs = [
+    { id: 'Coverage', label: t('screening.tab.coverage') },
+    { id: 'Risk Distribution', label: t('screening.tab.riskDist') },
+    { id: 'Trends', label: t('screening.tab.trends') },
+    { id: 'Conditions', label: t('screening.tab.conditions') }
+  ];
 
   // ═══ STATE FOR LIVE DATA ═══
   const [loading, setLoading] = useState(true);
@@ -105,10 +112,10 @@ const ScreeningRiskView: React.FC = () => {
 
   // ═══ DERIVED DATA ═══
   const coverageKPIs: KPI[] = coverageData ? [
-    { id: 'c1', label: 'TOTAL CHILDREN', value: coverageData.total.toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
-    { id: 'c2', label: 'SCREENED', value: coverageData.screened.toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
-    { id: 'c3', label: 'UNSCREENED', value: coverageData.unscreened.toLocaleString(), delta: 0, trend: [], accent: '#94A3B8' },
-    { id: 'c4', label: 'COVERAGE RATE', value: `${coverageData.rate}%`, delta: 0, trend: [], accent: '#000000' },
+    { id: 'c1', label: t('screening.kpi.totalChildren'), value: coverageData.total.toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
+    { id: 'c2', label: t('screening.kpi.screened'), value: coverageData.screened.toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
+    { id: 'c3', label: t('screening.kpi.unscreened'), value: coverageData.unscreened.toLocaleString(), delta: 0, trend: [], accent: '#94A3B8' },
+    { id: 'c4', label: t('screening.kpi.coverageRate'), value: `${coverageData.rate}%`, delta: 0, trend: [], accent: '#000000' },
   ] : [];
 
   const belowTargetDistricts = useMemo(() => {
@@ -118,10 +125,10 @@ const ScreeningRiskView: React.FC = () => {
   }, [districtCoverage]);
 
   const riskKPIs: KPI[] = riskData ? [
-    { id: 'r1', label: 'HIGH RISK (SAM)', value: riskData.high.toLocaleString(), delta: 0, trend: [], accent: '#EF4444' },
-    { id: 'r2', label: 'CRITICAL FLAGS', value: riskData.critical.toLocaleString(), delta: 0, trend: [], accent: '#000000' },
-    { id: 'r3', label: 'MEDIUM RISK', value: riskData.medium.toLocaleString(), delta: 0, trend: [], accent: '#F59E0B' },
-    { id: 'r4', label: 'HEALTHY / NORMAL', value: riskData.normal.toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
+    { id: 'r1', label: t('screening.kpi.highRiskSAM'), value: riskData.high.toLocaleString(), delta: 0, trend: [], accent: '#EF4444' },
+    { id: 'r2', label: t('screening.kpi.criticalFlags'), value: riskData.critical.toLocaleString(), delta: 0, trend: [], accent: '#000000' },
+    { id: 'r3', label: t('screening.kpi.mediumRisk'), value: riskData.medium.toLocaleString(), delta: 0, trend: [], accent: '#F59E0B' },
+    { id: 'r4', label: t('screening.kpi.healthyNormal'), value: riskData.normal.toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
   ] : [];
 
   const riskPieData = riskData ? [
@@ -139,24 +146,27 @@ const ScreeningRiskView: React.FC = () => {
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Screening & Risk Overview</h1>
-          <p className="text-[14px] text-[#888888] font-medium">Statewide diagnostic reach and risk profile analytics</p>
+          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('screening.title')}</h1>
+          <p className="text-[14px] text-[#888888] font-medium">{t('screening.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="bg-white border border-[#E5E5E5] rounded p-1 flex">
-            {['Quarter', 'Year', 'Financial Year'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setTimeFilter(f)}
-                className={`px-4 py-1.5 text-[12px] font-bold rounded-sm transition-all ${timeFilter === f ? 'bg-black text-white' : 'text-[#888] hover:text-black'
-                  }`}
-              >
-                {f}
-              </button>
-            ))}
+            {['Quarter', 'Year', 'Financial Year'].map((f) => {
+              const filterLabel = f === 'Quarter' ? t('screening.filter.quarter') : f === 'Year' ? t('screening.filter.year') : t('screening.filter.fy');
+              return (
+                <button
+                  key={f}
+                  onClick={() => setTimeFilter(f)}
+                  className={`px-4 py-1.5 text-[12px] font-bold rounded-sm transition-all ${timeFilter === f ? 'bg-black text-white' : 'text-[#888] hover:text-black'
+                    }`}
+                >
+                  {filterLabel}
+                </button>
+              )
+            })}
           </div>
           <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-            <Download size={16} /> Export Data
+            <Download size={16} /> {t('screening.exportData')}
           </button>
         </div>
       </div>
@@ -165,13 +175,13 @@ const ScreeningRiskView: React.FC = () => {
       <div className="flex border-b border-[#E5E5E5] mb-8 overflow-x-auto scrollbar-hide">
         {tabs.map(tab => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-8 py-4 text-[13px] font-bold transition-all relative whitespace-nowrap ${activeTab === tab ? 'text-black' : 'text-[#888] hover:text-[#555]'
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-8 py-4 text-[13px] font-bold transition-all relative whitespace-nowrap ${activeTab === tab.id ? 'text-black' : 'text-[#888] hover:text-[#555]'
               }`}
           >
-            {tab}
-            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black" />}
+            {tab.label}
+            {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black" />}
           </button>
         ))}
       </div>
@@ -192,7 +202,7 @@ const ScreeningRiskView: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">District Coverage Intensity</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">{t('screening.distCoverageIntensity')}</h3>
                   <div className="h-[340px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <Treemap
@@ -205,13 +215,13 @@ const ScreeningRiskView: React.FC = () => {
                       </Treemap>
                     </ResponsiveContainer>
                   </div>
-                  <p className="text-[11px] text-[#888] mt-4 font-bold uppercase tracking-widest text-center">Block size represents relative coverage percentage</p>
+                  <p className="text-[11px] text-[#888] mt-4 font-bold uppercase tracking-widest text-center">{t('screening.blockSize')}</p>
                 </div>
 
                 <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-[16px] font-black uppercase tracking-tight">Below Target Districts</h3>
-                    <span className="text-[11px] font-black text-amber-600 uppercase bg-amber-50 px-2 py-1 rounded tracking-widest">Target: 70%</span>
+                    <h3 className="text-[16px] font-black uppercase tracking-tight">{t('screening.belowTarget')}</h3>
+                    <span className="text-[11px] font-black text-amber-600 uppercase bg-amber-50 px-2 py-1 rounded tracking-widest">{t('screening.target70')}</span>
                   </div>
                   <div className="overflow-x-auto">
                     {belowTargetDistricts.length > 0 ? (
@@ -239,7 +249,7 @@ const ScreeningRiskView: React.FC = () => {
                       </table>
                     ) : (
                       <div className="py-12 text-center text-[#888] text-[13px] font-medium">
-                        ✅ All districts are at or above the 70% target
+                        ✅ {t('screening.allAbove')}
                       </div>
                     )}
                   </div>
@@ -248,7 +258,7 @@ const ScreeningRiskView: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">Age Band Reach</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">{t('screening.ageBandReach')}</h3>
                   <div className="h-[280px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={ageBands} layout="vertical">
@@ -261,13 +271,13 @@ const ScreeningRiskView: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                   <div className="flex justify-center gap-6 mt-4">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-black rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">Screened</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#EEE] rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">Gap</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-black rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">{t('screening.kpi.screened')}</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#EEE] rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">{t('screening.gap')}</span></div>
                   </div>
                 </div>
 
                 <div className="lg:col-span-2 bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">Coverage by District (12 Months)</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">{t('screening.coverageByDist')}</h3>
                   <div className="h-[280px]">
                     {coverageTrends?.months ? (
                       <ResponsiveContainer width="100%" height="100%">
@@ -283,7 +293,7 @@ const ScreeningRiskView: React.FC = () => {
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-full flex items-center justify-center text-[#888] text-[13px]">No trend data available</div>
+                      <div className="h-full flex items-center justify-center text-[#888] text-[13px]">{t('screening.noTrendData')}</div>
                     )}
                   </div>
                 </div>
@@ -309,7 +319,7 @@ const ScreeningRiskView: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
                 <div className="lg:col-span-7 bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">Risk by District (Relative Volume)</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">{t('screening.riskByDist')}</h3>
                   <div className="h-[340px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={riskByDistrict}>
@@ -328,7 +338,7 @@ const ScreeningRiskView: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-3 bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm flex flex-col items-center justify-center">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8 w-full">State Risk Profile</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-8 w-full">{t('screening.stateRiskProfile')}</h3>
                   <div className="relative w-full h-[240px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -338,7 +348,7 @@ const ScreeningRiskView: React.FC = () => {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest">SAM Rate</span>
+                      <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest">{t('screening.samRate')}</span>
                       <span className="text-[28px] font-black">{samRate}%</span>
                     </div>
                   </div>
@@ -354,7 +364,7 @@ const ScreeningRiskView: React.FC = () => {
               {/* Domain Concern Heatmap - from condition-heatmap */}
               <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
                 <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight">Domain Concern Heatmap</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight">{t('screening.domainHeatmap')}</h3>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1"><div className="w-3 h-3 bg-gray-50 border border-gray-100" /><span className="text-[10px] font-bold text-[#888]">LOW</span></div>
                     <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-800" /><span className="text-[10px] font-bold text-[#888]">CRITICAL</span></div>
@@ -411,10 +421,10 @@ const ScreeningRiskView: React.FC = () => {
             <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
               <div className="flex justify-between items-center mb-10">
                 <div>
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-2">Multi-District Trend Comparison</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-2">{t('screening.multiDistTrend')}</h3>
                   <div className="flex gap-4">
-                    <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-black" /><span className="text-[11px] font-black uppercase text-black">State Average</span></div>
-                    <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-[#CCC]" /><span className="text-[11px] font-bold uppercase text-[#888]">Districts ({coverageTrends?.districtNames?.length || 0})</span></div>
+                    <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-black" /><span className="text-[11px] font-black uppercase text-black">{t('screening.stateAvg')}</span></div>
+                    <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-[#CCC]" /><span className="text-[11px] font-bold uppercase text-[#888]">{t('screening.districts')} ({coverageTrends?.districtNames?.length || 0})</span></div>
                   </div>
                 </div>
               </div>
@@ -458,7 +468,7 @@ const ScreeningRiskView: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-                <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Condition Prevalence (Statewide)</h3>
+                <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('screening.condPrevalence')}</h3>
                 <div className="space-y-6">
                   {conditions?.conditions?.length > 0 ? (
                     conditions.conditions.map((stat: any) => {
@@ -477,14 +487,14 @@ const ScreeningRiskView: React.FC = () => {
                       )
                     })
                   ) : (
-                    <div className="py-12 text-center text-[#888] text-[13px]">No condition data available</div>
+                    <div className="py-12 text-center text-[#888] text-[13px]">{t('screening.noCondData')}</div>
                   )}
                 </div>
               </div>
 
               <div className="flex flex-col gap-6">
                 <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm flex-1">
-                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">Condition by District Heatmap</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight mb-6">{t('screening.condByDistHeatmap')}</h3>
                   {conditionHeatmap && conditionHeatmap.districts?.length > 0 ? (
                     <div className="overflow-x-auto">
                       <div className="min-w-[400px]">
@@ -519,7 +529,7 @@ const ScreeningRiskView: React.FC = () => {
                     <div className="mt-8 p-4 bg-red-50 rounded border border-red-100">
                       <div className="flex gap-2 items-center mb-2">
                         <AlertCircle size={16} className="text-red-600" />
-                        <span className="text-[13px] font-black text-red-700 uppercase">Prevalence Alert</span>
+                        <span className="text-[13px] font-black text-red-700 uppercase">{t('screening.prevalenceAlert')}</span>
                       </div>
                       <p className="text-[12px] text-red-900 leading-snug font-medium">
                         {conditions.conditions[0].condition} is the most prevalent condition with {conditions.conditions[0].count.toLocaleString()} cases ({conditions.conditions[0].rate} per 1,000 children).
@@ -530,7 +540,7 @@ const ScreeningRiskView: React.FC = () => {
 
                 <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm h-64">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-[16px] font-black uppercase tracking-tight">Condition Trend Line</h3>
+                    <h3 className="text-[16px] font-black uppercase tracking-tight">{t('screening.condTrendLine')}</h3>
                   </div>
                   <div className="h-32">
                     {conditionTrends?.data ? (

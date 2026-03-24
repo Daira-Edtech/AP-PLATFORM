@@ -10,6 +10,7 @@ import {
   ArrowRight, Filter, Download, MoreHorizontal, CheckCircle2
 } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 export interface EscalationViewProps {
   escalations: Escalation[];
@@ -18,6 +19,7 @@ export interface EscalationViewProps {
 const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
   const [activeTab, setActiveTab] = useState('Active');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   // Calculate tab counts from real data
   const activeCount = escalations.filter(e => e.status === 'Active').length;
@@ -25,9 +27,9 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
   const resolvedCount = escalations.filter(e => e.status === 'Resolved').length;
 
   const tabs = [
-    { label: 'Active', count: activeCount },
-    { label: 'In Progress', count: inProgressCount },
-    { label: 'Resolved', count: resolvedCount }
+    { label: t('escalation.tab.active'), count: activeCount, id: 'Active' },
+    { label: t('escalation.tab.inProgress'), count: inProgressCount, id: 'In Progress' },
+    { label: t('escalation.tab.resolved'), count: resolvedCount, id: 'Resolved' }
   ];
 
   // Filter escalations based on active tab
@@ -44,10 +46,10 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
     : 0;
 
   const escalationKPIs: KPI[] = [
-    { id: 'e1', label: 'OPEN ESCALATIONS', value: String(openEscalations), delta: 0, trend: [openEscalations], accent: '#000000' },
-    { id: 'e2', label: 'CRITICAL (21d+)', value: String(criticalLongPending), delta: 0, trend: [criticalLongPending], accent: '#EF4444' },
-    { id: 'e3', label: 'AVG RESOLUTION', value: `${avgResolution} days`, delta: 0, trend: [avgResolution], accent: '#3B82F6' },
-    { id: 'e4', label: 'RESOLUTION RATE', value: `${resolutionRate}%`, delta: 0, trend: [resolutionRate], accent: '#22C55E' },
+    { id: 'e1', label: t('escalation.kpi.open'), value: String(openEscalations), delta: 0, trend: [openEscalations], accent: '#000000' },
+    { id: 'e2', label: t('escalation.kpi.critical'), value: String(criticalLongPending), delta: 0, trend: [criticalLongPending], accent: '#EF4444' },
+    { id: 'e3', label: t('escalation.kpi.avgResolution'), value: `${avgResolution}d`, delta: 0, trend: [avgResolution], accent: '#3B82F6' },
+    { id: 'e4', label: t('escalation.kpi.resRate'), value: `${resolutionRate}%`, delta: 0, trend: [resolutionRate], accent: '#22C55E' },
   ];
 
   const toggleExpand = (id: string) => {
@@ -59,12 +61,12 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">State Escalations</h1>
-          <p className="text-[14px] text-[#888888] font-medium">State-level oversight for cases requiring immediate executive intervention</p>
+          <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('escalation.title')}</h1>
+          <p className="text-[14px] text-[#888888] font-medium">{t('escalation.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-            <Download size={16} /> Resolution Logs
+            <Download size={16} /> {t('escalation.resolutionLogs')}
           </button>
         </div>
       </div>
@@ -77,12 +79,12 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
               <AlertCircle size={22} />
             </div>
             <div>
-              <h3 className="text-red-900 font-bold text-[16px]">Attention: {criticalLongPending} Critical Cases Escalated</h3>
-              <p className="text-red-700 text-[13px]">These cases have been pending at State Level for 21+ days without resolution.</p>
+              <h3 className="text-red-900 font-bold text-[16px]">{t('escalation.attention')}: {criticalLongPending} {t('escalation.criticalCases')}</h3>
+              <p className="text-red-700 text-[13px]">{t('escalation.pending21d')}</p>
             </div>
           </div>
           <button className="bg-red-600 text-white px-6 py-2 rounded font-black text-[12px] uppercase tracking-widest hover:bg-red-700 transition-all">
-            Priority Audit
+            {t('escalation.priorityAudit')}
           </button>
         </div>
       )}
@@ -113,7 +115,7 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
           <div className="space-y-4">
             {filteredEscalations.length === 0 && (
               <div className="bg-white border border-[#E5E5E5] rounded-xl p-12 text-center">
-                <div className="text-[#888] text-[14px] font-medium">No escalations in this category</div>
+                <div className="text-[#888] text-[14px] font-medium">{t('escalation.noEsc')}</div>
               </div>
             )}
             {filteredEscalations.map((esc) => (
@@ -143,8 +145,8 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
-                           <span className="text-[10px] font-bold text-[#888] uppercase">Pending at State</span>
-                           <span className="text-[18px] font-black">{esc.daysOpen} Days</span>
+                           <span className="text-[10px] font-bold text-[#888] uppercase">{t('escalation.pendingState')}</span>
+                           <span className="text-[18px] font-black">{esc.daysOpen} {t('escalation.days')}</span>
                         </div>
                         {expandedId === esc.id ? <ChevronUp size={20} className="text-[#888]" /> : <ChevronDown size={20} className="text-[#888]" />}
                       </div>
@@ -166,34 +168,34 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
                    {/* COLLAPSED NOTES PREVIEW */}
                    {!expandedId && (
                      <p className="text-[13px] text-[#555] line-clamp-1 italic">
-                       District Note: {esc.districtNotes}
+                       {t('escalation.districtNote')}: {esc.districtNotes}
                      </p>
                    )}
 
                    {/* EXPANDED CONTENT */}
                    {expandedId === esc.id && (
                      <div className="animate-in slide-in-from-top-2 duration-300">
-                        <div className="grid grid-cols-2 gap-8 mt-6">
+                       <div className="grid grid-cols-2 gap-8 mt-6">
                            <div>
-                              <h5 className="text-[11px] font-black uppercase text-[#888] mb-3 tracking-widest">District Observations</h5>
+                              <h5 className="text-[11px] font-black uppercase text-[#888] mb-3 tracking-widest">{t('escalation.distObservations')}</h5>
                               <div className="bg-[#F9F9F9] border border-[#EEE] rounded-lg p-4 italic text-[13px] text-[#444] leading-relaxed">
                                 "{esc.districtNotes}"
                               </div>
                               <div className="mt-6">
-                                 <h5 className="text-[11px] font-black uppercase text-[#888] mb-4 tracking-widest">Action Required</h5>
+                                 <h5 className="text-[11px] font-black uppercase text-[#888] mb-4 tracking-widest">{t('escalation.actionRequired')}</h5>
                                  <div className="flex flex-col gap-3">
                                     <button className="bg-black text-white w-full py-3 rounded font-black text-[12px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-800 transition-all active:scale-[0.98]">
-                                       <ShieldAlert size={16} /> Issue State Directive
+                                       <ShieldAlert size={16} /> {t('escalation.issueDirective')}
                                     </button>
                                     <div className="grid grid-cols-2 gap-3">
-                                       <button className="bg-white border border-[#E5E5E5] py-2.5 rounded font-bold text-[12px] hover:bg-gray-50 transition-all">Reassign District</button>
-                                       <button className="bg-white border border-[#E5E5E5] py-2.5 rounded font-bold text-[12px] hover:bg-gray-50 transition-all">Resolve Case</button>
+                                       <button className="bg-white border border-[#E5E5E5] py-2.5 rounded font-bold text-[12px] hover:bg-gray-50 transition-all">{t('escalation.reassign')}</button>
+                                       <button className="bg-white border border-[#E5E5E5] py-2.5 rounded font-bold text-[12px] hover:bg-gray-50 transition-all">{t('escalation.resolveCase')}</button>
                                     </div>
                                  </div>
                               </div>
                            </div>
                            <div>
-                              <h5 className="text-[11px] font-black uppercase text-[#888] mb-3 tracking-widest">Escalation Timeline</h5>
+                              <h5 className="text-[11px] font-black uppercase text-[#888] mb-3 tracking-widest">{t('escalation.timeline')}</h5>
                               <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-[#EEE]">
                                  {esc.timeline.map((event, i) => (
                                    <div key={i} className="relative">
@@ -211,7 +213,7 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
                         </div>
                         <div className="mt-8 pt-6 border-t border-[#F5F5F5] flex justify-between items-center">
                            <button className="text-[12px] font-black text-black uppercase tracking-widest flex items-center gap-2 hover:gap-3 transition-all">
-                              View Child Profile <ArrowRight size={16} />
+                              {t('escalation.viewChild')} <ArrowRight size={16} />
                            </button>
                            <div className="flex items-center gap-2">
                               <MessageSquare size={14} className="text-[#888]" />
@@ -229,7 +231,7 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
         {/* STATS SIDEBAR */}
         <div className="w-[320px] space-y-6">
            <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-              <h3 className="text-[15px] font-black uppercase tracking-tight mb-6">Escalations by District</h3>
+              <h3 className="text-[15px] font-black uppercase tracking-tight mb-6">{t('escalation.byDistrict')}</h3>
               <div className="space-y-5">
                  {DISTRICT_MOCK_DATA.slice(0, 8).map(d => {
                    const count = Math.floor(Math.random() * 25 + 5);
@@ -254,7 +256,7 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
                         </div>
                         {isBottleneck && (
                           <div className="mt-2 flex items-center gap-1.5 text-[10px] font-black text-red-700 uppercase tracking-tighter animate-pulse">
-                             <AlertCircle size={10} /> District Bottleneck Detected
+                             <AlertCircle size={10} /> {t('escalation.bottleneck')}
                           </div>
                         )}
                      </div>
@@ -268,21 +270,21 @@ const EscalationView: React.FC<EscalationViewProps> = ({ escalations }) => {
 
            <div className="bg-black text-white rounded-xl p-6 shadow-xl relative overflow-hidden">
               <div className="relative z-10">
-                 <h4 className="text-[11px] font-black uppercase text-[#888] mb-4 tracking-widest">System Health</h4>
+                 <h4 className="text-[11px] font-black uppercase text-[#888] mb-4 tracking-widest">{t('escalation.systemHealth')}</h4>
                  <div className="space-y-4">
                     <div className="flex justify-between">
-                       <span className="text-[12px] font-bold opacity-70">Auto-Escalation Rate</span>
+                       <span className="text-[12px] font-bold opacity-70">{t('escalation.autoEscRate')}</span>
                        <span className="text-[14px] font-black">12%</span>
                     </div>
                     <div className="flex justify-between">
-                       <span className="text-[12px] font-bold opacity-70">Compliance Lag</span>
+                       <span className="text-[12px] font-bold opacity-70">{t('escalation.complianceLag')}</span>
                        <span className="text-[14px] font-black text-red-400">+4.2d</span>
                     </div>
                  </div>
                  <div className="mt-6 pt-6 border-t border-white/10">
                     <div className="flex items-center gap-3">
                        <CheckCircle2 size={18} className="text-green-500" />
-                       <span className="text-[11px] font-bold text-white/80">Platform AI flagging operational.</span>
+                       <span className="text-[11px] font-bold text-white/80">{t('escalation.aiOperational')}</span>
                     </div>
                  </div>
               </div>

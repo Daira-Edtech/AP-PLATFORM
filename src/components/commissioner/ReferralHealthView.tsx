@@ -10,6 +10,7 @@ import {
    CheckCircle2, Building2, Download, Filter, ChevronRight, Search
 } from 'lucide-react';
 import KPICard from '@/components/commissioner/KPICard';
+import { useLanguage } from '@/lib/commissioner/LanguageContext';
 
 type FacilityStatus = 'Available' | 'Limited' | 'Capacity' | 'None';
 
@@ -19,6 +20,7 @@ const Skeleton = ({ className = '' }: { className?: string }) => (
 
 const ReferralHealthView: React.FC = () => {
    const [timeFilter, setTimeFilter] = useState('Month');
+   const { t } = useLanguage();
 
    // ═══ STATE ═══
    const [loading, setLoading] = useState(true);
@@ -72,12 +74,12 @@ const ReferralHealthView: React.FC = () => {
 
    // ═══ DERIVED ═══
    const referralKPIs = kpis ? [
-      { id: 'r1', label: 'TOTAL REFERRALS', value: (kpis.total || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
-      { id: 'r2', label: 'ACTIVE (PENDING)', value: (kpis.active || 0).toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
-      { id: 'r3', label: 'SCHEDULED', value: (kpis.scheduled || 0).toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
-      { id: 'r4', label: 'COMPLETED', value: (kpis.completed || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
-      { id: 'r5', label: 'OVERDUE', value: (kpis.overdue || 0).toLocaleString(), delta: 0, trend: [], accent: '#EF4444' },
-      { id: 'r6', label: 'AVG WAIT TIME', value: kpis.avgWait > 0 ? `${kpis.avgWait} days` : 'N/A', delta: 0, trend: [], accent: '#F59E0B' },
+      { id: 'r1', label: t('referral.kpi.total'), value: (kpis.total || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
+      { id: 'r2', label: t('referral.kpi.active'), value: (kpis.active || 0).toLocaleString(), delta: 0, trend: [], accent: '#3B82F6' },
+      { id: 'r3', label: t('referral.kpi.scheduled'), value: (kpis.scheduled || 0).toLocaleString(), delta: 0, trend: [], accent: '#22C55E' },
+      { id: 'r4', label: t('referral.kpi.completed'), value: (kpis.completed || 0).toLocaleString(), delta: 0, trend: [], accent: '#000000' },
+      { id: 'r5', label: t('referral.kpi.overdue'), value: (kpis.overdue || 0).toLocaleString(), delta: 0, trend: [], accent: '#EF4444' },
+      { id: 'r6', label: t('referral.kpi.avgWait'), value: kpis.avgWait > 0 ? `${kpis.avgWait} d` : 'N/A', delta: 0, trend: [], accent: '#F59E0B' },
    ] : [];
 
    const filteredOverdue = overdueData.filter((r: any) =>
@@ -121,8 +123,8 @@ const ReferralHealthView: React.FC = () => {
          {/* HEADER */}
          <div className="flex justify-between items-end mb-8">
             <div>
-               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">Referral Health</h1>
-               <p className="text-[14px] text-[#888888] font-medium">Statewide referral pipeline efficiency and diagnostic facility capacity</p>
+               <h1 className="text-[32px] font-bold text-black tracking-tighter leading-none mb-2">{t('referral.title')}</h1>
+               <p className="text-[14px] text-[#888888] font-medium">{t('referral.subtitle')}</p>
             </div>
             <div className="flex items-center gap-3">
                <div className="bg-white border border-[#E5E5E5] rounded p-1 flex">
@@ -138,7 +140,7 @@ const ReferralHealthView: React.FC = () => {
                   ))}
                </div>
                <button className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] bg-white rounded text-[13px] font-bold hover:bg-[#F9F9F9]">
-                  <Download size={16} /> Data Export
+                  <Download size={16} /> {t('referral.dataExport')}
                </button>
             </div>
          </div>
@@ -148,9 +150,8 @@ const ReferralHealthView: React.FC = () => {
             {referralKPIs.map(kpi => <KPICard key={kpi.id} {...kpi} />)}
          </div>
 
-         {/* PIPELINE FUNNEL */}
          <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm mb-8">
-            <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Statewide Referral Pipeline</h3>
+            <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('referral.pipeline')}</h3>
             {pipeline.length > 0 ? (
                <>
                   <div className="flex items-center">
@@ -180,10 +181,10 @@ const ReferralHealthView: React.FC = () => {
                   </div>
                   <div className="mt-12 flex justify-center">
                      <div className="flex items-center gap-8 bg-black text-white px-8 py-3 rounded-full text-[12px] font-black uppercase tracking-widest shadow-2xl">
-                        <span className="opacity-50">Operational Goal:</span>
-                        <span className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500" /> 75% Completion</span>
+                        <span className="opacity-50">{t('referral.operationalGoal')}</span>
+                        <span className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500" /> {t('referral.completion')}</span>
                         <span className="w-[1px] h-4 bg-white/20" />
-                        <span className="flex items-center gap-2"><Clock size={16} className="text-amber-500" /> &lt;7 Day Wait</span>
+                        <span className="flex items-center gap-2"><Clock size={16} className="text-amber-500" /> {t('referral.dayWait')}</span>
                      </div>
                   </div>
                </>
@@ -195,7 +196,7 @@ const ReferralHealthView: React.FC = () => {
          {/* CHARTS ROW */}
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-               <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Referrals by Specialist Type</h3>
+               <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('referral.bySpecialist')}</h3>
                <div className="h-[340px]">
                   {specialistData.length > 0 ? (
                      <ResponsiveContainer width="100%" height="100%">
@@ -216,7 +217,7 @@ const ReferralHealthView: React.FC = () => {
             </div>
 
             <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
-               <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">Referrals by District (Status Breakdown)</h3>
+               <h3 className="text-[16px] font-black uppercase tracking-tight mb-8">{t('referral.byDistrict')}</h3>
                <div className="h-[340px]">
                   {districtData.length > 0 ? (
                      <ResponsiveContainer width="100%" height="100%">
@@ -239,13 +240,13 @@ const ReferralHealthView: React.FC = () => {
          <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm mb-8 overflow-hidden">
             <div className="p-8 border-b border-[#F5F5F5] flex justify-between items-center bg-black text-white">
                <div>
-                  <h3 className="text-[20px] font-black uppercase tracking-tight mb-1">Facility Status Across State</h3>
-                  <p className="text-[13px] opacity-70">Capacity monitoring of referral nodes. Red circles indicate critical bottlenecks.</p>
+                  <h3 className="text-[20px] font-black uppercase tracking-tight mb-1">{t('referral.facilityStatus')}</h3>
+                  <p className="text-[13px] opacity-70">{t('referral.facilityCaption')}</p>
                </div>
                <div className="flex gap-6">
                   <div className="flex flex-col items-center">
                      <span className="text-[24px] font-black">{facilityGrid?.totalNodes || 0}</span>
-                     <span className="text-[9px] font-black uppercase opacity-60">Total Nodes</span>
+                     <span className="text-[9px] font-black uppercase opacity-60">{t('referral.totalNodes')}</span>
                   </div>
                   <div className="w-[1px] h-10 bg-white/20" />
                   <div className="flex flex-col items-center text-red-400">
@@ -317,14 +318,14 @@ const ReferralHealthView: React.FC = () => {
          <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm mb-8 overflow-hidden">
             <div className="p-6 border-b border-[#F5F5F5] flex justify-between items-center">
                <div>
-                  <h3 className="text-[16px] font-black uppercase tracking-tight">Critical Overdue Referrals</h3>
-                  <p className="text-[12px] text-[#888]">Top 50 high-priority cases exceeding state protocol limits</p>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight">{t('referral.critOverdue')}</h3>
+                  <p className="text-[12px] text-[#888]">{t('referral.top50')}</p>
                </div>
                <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#888]" />
                   <input
                      type="text"
-                     placeholder="Search child / ID..."
+                     placeholder={t('referral.searchChild')}
                      value={searchTerm}
                      onChange={(e) => setSearchTerm(e.target.value)}
                      className="pl-9 pr-4 py-2 bg-[#F9F9F9] border border-[#E5E5E5] rounded text-[12px] w-64 outline-none focus:ring-1 focus:ring-black"
@@ -336,13 +337,13 @@ const ReferralHealthView: React.FC = () => {
                   <table className="w-full text-left">
                      <thead className="bg-[#F9F9F9] text-[10px] font-black uppercase tracking-widest text-[#888] border-b border-[#EEE]">
                         <tr>
-                           <th className="px-8 py-4">Ref ID</th>
-                           <th className="px-4 py-4">Child Name</th>
+                           <th className="px-8 py-4">{t('table.refId')}</th>
+                           <th className="px-4 py-4">{t('table.childName')}</th>
                            <th className="px-4 py-4">District</th>
-                           <th className="px-4 py-4">Type</th>
-                           <th className="px-4 py-4 text-center">Days Overdue</th>
-                           <th className="px-4 py-4 text-center">Status</th>
-                           <th className="px-8 py-4 text-right">Actions</th>
+                           <th className="px-4 py-4">{t('table.type')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.daysOverdue')}</th>
+                           <th className="px-4 py-4 text-center">{t('table.status')}</th>
+                           <th className="px-8 py-4 text-right">{t('table.actions')}</th>
                         </tr>
                      </thead>
                      <tbody className="text-[13px] divide-y divide-[#F5F5F5]">
@@ -387,13 +388,13 @@ const ReferralHealthView: React.FC = () => {
          <div className="bg-white border border-[#E5E5E5] rounded-xl p-8 shadow-sm">
             <div className="flex justify-between items-center mb-10">
                <div>
-                  <h3 className="text-[16px] font-black uppercase tracking-tight">Referral Intake vs Resolution</h3>
+                  <h3 className="text-[16px] font-black uppercase tracking-tight">{t('referral.intakeVsRes')}</h3>
                   <p className="text-[12px] text-[#888]">12-month longitudinal tracking of referral conversion efficiency</p>
                </div>
                <div className="flex gap-6">
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-black rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">Generated</span></div>
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">Completed</span></div>
-                  <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-blue-500" /><span className="text-[10px] font-black text-blue-500 uppercase">Rate %</span></div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-black rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">{t('referral.generated')}</span></div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-sm" /><span className="text-[10px] font-black text-[#888] uppercase">{t('referral.completed')}</span></div>
+                  <div className="flex items-center gap-2"><div className="w-4 h-[2px] bg-blue-500" /><span className="text-[10px] font-black text-blue-500 uppercase">{t('referral.ratePct')}</span></div>
                </div>
             </div>
             <div className="h-[380px]">

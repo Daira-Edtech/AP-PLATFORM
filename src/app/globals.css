@@ -1,21 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa;
+  --foreground: #0f172a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-noto-sans), sans-serif;
+  
+  /* Brand Primary Purple */
+  --color-primary-solid: #7C3AED;
+  --color-primary-hover: #8B5CF6;
+  --color-primary-light: #F5F3FF;
+  --color-primary-border: #DDD6FE;
+  
+  /* Action Blue */
+  --color-action-solid: #1D4ED8;
+  --color-action-hover: #3B82F6;
+  --color-action-light: #EFF6FF;
+  --color-action-border: #BFDBFE;
+
+  /* Neutrals */
+  --color-app-bg: #fafafa;
+  --color-card-bg: #ffffff;
+  --color-slate-light: #f8fafc;
+  --color-slate-mute: #f1f5f9;
+  --color-border-mute: #e6e6e6;
+  --color-border-slate: #e2e8f0;
+
+  /* Typography Colors */
+  --color-pure-black: #000000;
+  --color-dark-slate: #0f172a;
+  --color-subtle-text: #64748b;
+  --color-placeholder: #94a3b8;
+  
+  /* Deep Black Elements */
+  --color-black-btn: #1a1a1a;
+  --color-white: #ffffff;
+
+  /* semantic colors - Green */
+  --color-success-text: #10B981;
+  --color-success-dark: #047857;
+  --color-success-light: #F0FDF4;
+  --color-success-border: #A7F3D0; /* equivalent to 30% */
+
+  /* Semantic - Yellow / Amber */
+  --color-warning-text: #F59E0B;
+  --color-warning-dark: #B45309;
+  --color-warning-light: #FFFBEB;
+  --color-warning-border: #FDE68A;
+
+  /* Semantic - Orange */
+  --color-orange-text: #F97316;
+  --color-orange-dark: #C2410C;
+  --color-orange-light: #FFF7ED;
+  --color-orange-border: #FED7AA;
+
+  /* Semantic - Red */
+  --color-danger-text: #EF4444;
+  --color-danger-dark: #DC2626;
+  --color-danger-light: #FEF2F2;
+  --color-danger-border: #FECACA;
+  
+  /* Semantic Shadows/Radius */
+  --radius-button: 16px;
+  --radius-card: 20px;
+  --radius-badge: 8px;
 }
 
-
-
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

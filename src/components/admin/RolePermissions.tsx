@@ -89,6 +89,8 @@ const RolePermissions: React.FC = () => {
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [resetPending, setResetPending] = useState(false);
 
     useEffect(() => {
         const fetchPermissions = async () => {
@@ -132,12 +134,15 @@ const RolePermissions: React.FC = () => {
 
     const handleSave = async () => {
         setIsSaving(true);
+        setSaveStatus('idle');
         try {
             await actions.updateRolePermissions(groups);
             setIsDirty(false);
-            alert('Permissions updated successfully.');
-        } catch (error) {
-            alert('Failed to update permissions.');
+            setSaveStatus('success');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        } catch {
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus('idle'), 3000);
         } finally {
             setIsSaving(false);
         }
@@ -145,14 +150,30 @@ const RolePermissions: React.FC = () => {
 
     const handleReset = (e: React.MouseEvent) => {
         e.preventDefault();
-        if (confirm('Reset all permissions to system defaults?')) {
+        if (!resetPending) {
+            setResetPending(true);
+            setTimeout(() => setResetPending(false), 3000);
+        } else {
             setGroups(INITIAL_PERMISSIONS);
             setIsDirty(false);
+            setResetPending(false);
         }
     };
 
     return (
         <div className="space-y-6">
+            {saveStatus === 'success' && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-bold">
+                    <Check size={16} className="text-green-600" />
+                    Permissions updated successfully.
+                </div>
+            )}
+            {saveStatus === 'error' && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm font-bold">
+                    <AlertCircle size={16} className="text-red-600" />
+                    Failed to update permissions. Please try again.
+                </div>
+            )}
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-[24px] font-semibold text-black leading-tight">Role Permissions</h1>
@@ -161,10 +182,14 @@ const RolePermissions: React.FC = () => {
                 <div className="flex items-center space-x-3">
                     <button
                         onClick={handleReset}
-                        className="text-[13px] font-bold text-gray-400 hover:text-black flex items-center space-x-2 transition-colors"
+                        className={`text-[13px] font-bold flex items-center space-x-2 transition-all px-3 py-1.5 rounded-lg ${
+                            resetPending
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                : 'text-gray-400 hover:text-black'
+                        }`}
                     >
                         <RotateCcw size={16} />
-                        <span>Reset to defaults</span>
+                        <span>{resetPending ? 'Confirm reset?' : 'Reset to defaults'}</span>
                     </button>
                     <button
                         disabled={!isDirty || isSaving}

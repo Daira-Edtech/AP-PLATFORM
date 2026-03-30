@@ -60,12 +60,22 @@ const GeographyHierarchy: React.FC = () => {
     const [isAdding, setIsAdding] = useState(false);
     const [newEntityData, setNewEntityData] = useState<any>({ name: '', code: '', type: '', parentId: '' });
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+    const [deletePending, setDeletePending] = useState(false);
+    const [unassignPendingId, setUnassignPendingId] = useState<string | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
+
+    const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+        setToast({ type, message });
+        setTimeout(() => setToast(null), 3500);
+    };
 
     const handleCreate = async () => {
         if (!newEntityData.name || !newEntityData.code) {
-            alert('Name and Code are required');
+            setValidationError('Name and Code are required');
             return;
         }
+        setValidationError(null);
         setSaving(true);
         try {
             const data: any = {
@@ -100,12 +110,12 @@ const GeographyHierarchy: React.FC = () => {
             }
 
             await actions.createEntity(newEntityData.type, data);
-            alert('Created successfully');
+            showToast('success', 'Created successfully');
             setIsAdding(false);
             setNewEntityData({ name: '', code: '', type: '', parentId: '' });
             fetchHierarchy();
         } catch (err: any) {
-            alert('Error creating: ' + err.message);
+            showToast('error', 'Error creating: ' + err.message);
         } finally {
             setSaving(false);
         }
@@ -223,10 +233,10 @@ const GeographyHierarchy: React.FC = () => {
                 updates.longitude = formData.longitude ? parseFloat(formData.longitude) : null;
             }
             await actions.updateEntity(selectedNode.id, selectedNode.type, updates);
-            alert('Updated successfully');
+            showToast('success', 'Updated successfully');
             fetchHierarchy();
         } catch (err: any) {
-            alert('Error updating: ' + err.message);
+            showToast('error', 'Error updating: ' + err.message);
         } finally {
             setSaving(false);
         }
@@ -234,25 +244,37 @@ const GeographyHierarchy: React.FC = () => {
 
     const handleUnassign = async (userId: string) => {
         if (!selectedNode) return;
-        if (!confirm('Are you sure you want to unassign this user?')) return;
+        if (unassignPendingId !== userId) {
+            setUnassignPendingId(userId);
+            setTimeout(() => setUnassignPendingId(null), 3000);
+            return;
+        }
+        setUnassignPendingId(null);
         try {
             await actions.unassignUser(userId, selectedNode.type);
             handleNodeSelect(selectedNode);
+            showToast('success', 'User unassigned');
         } catch (err: any) {
-            alert('Failed to unassign: ' + err.message);
+            showToast('error', 'Failed to unassign: ' + err.message);
         }
     };
 
     const handleDelete = async () => {
         if (!selectedNode) return;
-        if (!confirm(`Are you sure you want to delete ${selectedNode.name}? This cannot be undone and will delete all child entities.`)) return;
+        if (!deletePending) {
+            setDeletePending(true);
+            setTimeout(() => setDeletePending(false), 3000);
+            return;
+        }
+        setDeletePending(false);
         setSaving(true);
         try {
             await actions.deleteEntity(selectedNode.id, selectedNode.type);
             setSelectedNode(null);
             fetchHierarchy();
+            showToast('success', 'Deleted successfully');
         } catch (err: any) {
-            alert('Delete failed: ' + err.message);
+            showToast('error', 'Delete failed: ' + err.message);
         } finally {
             setSaving(false);
         }
@@ -273,7 +295,7 @@ const GeographyHierarchy: React.FC = () => {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        alert('Bulk import functionality is being processed. For now, please use the User Bulk Import page or seed the database directly with full_schema.sql.');
+        showToast('info', 'Bulk import: use the User Bulk Import page or seed via full_schema.sql.');
     };
 
     const handleAssignClick = () => {
@@ -345,6 +367,17 @@ const GeographyHierarchy: React.FC = () => {
                 accept=".csv,.json"
                 className="hidden"
             />
+
+            {/* Toast */}
+            {toast && (
+                <div className={`fixed top-4 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-bold border ${
+                    toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                    toast.type === 'error'   ? 'bg-red-50 border-red-200 text-red-800' :
+                                              'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                    {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'} {toast.message}
+                </div>
+            )}
 
             <div className="flex justify-between items-start">
                 <div>
@@ -480,7 +513,12 @@ const GeographyHierarchy: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="pt-8 flex justify-end">
+                            {validationError && (
+                                <div className="text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                    {validationError}
+                                </div>
+                            )}
+                            <div className="pt-4 flex justify-end">
                                 <button
                                     onClick={handleCreate}
                                     disabled={saving}
@@ -560,10 +598,10 @@ const GeographyHierarchy: React.FC = () => {
                                         )}
                                         <button
                                             onClick={handleDelete}
-                                            className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-all"
-                                            title="Delete this entity"
+                                            className={`p-2 rounded-lg transition-all text-sm font-bold ${deletePending ? 'bg-red-600 text-white px-3' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'}`}
+                                            title={deletePending ? 'Click again to confirm delete' : 'Delete this entity'}
                                         >
-                                            <Icons.Trash2 size={20} />
+                                            {deletePending ? 'Confirm?' : <Icons.Trash2 size={20} />}
                                         </button>
                                     </div>
                                 </div>
@@ -638,9 +676,9 @@ const GeographyHierarchy: React.FC = () => {
                                                     <div className={`w-2 h-2 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-gray-300'}`} />
                                                     <button
                                                         onClick={() => handleUnassign(user.id)}
-                                                        className="text-[11px] font-bold text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className={`text-[11px] font-bold transition-all opacity-0 group-hover:opacity-100 ${unassignPendingId === user.id ? 'text-white bg-red-600 px-2 py-0.5 rounded opacity-100' : 'text-red-500'}`}
                                                     >
-                                                        Unassign
+                                                        {unassignPendingId === user.id ? 'Confirm?' : 'Unassign'}
                                                     </button>
                                                 </div>
                                             </div>

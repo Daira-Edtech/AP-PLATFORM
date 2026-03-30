@@ -1,413 +1,352 @@
 'use client';
 
-import React from 'react';
+import React, { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Activity, CheckCircle2, AlertTriangle, XCircle,
-    Database, Zap, Clock, Server, ShieldCheck,
-    ArrowUpRight, RefreshCw, BarChart3, HardDrive,
-    Info, Cpu, Network
+    Database, Clock, Server, ShieldCheck,
+    RefreshCw, HardDrive, Info, Cpu, Network, Zap
 } from 'lucide-react';
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, AreaChart, Area,
-    Legend
+    AreaChart, Area, XAxis, YAxis, CartesianGrid,
+    Tooltip, ResponsiveContainer
 } from 'recharts';
+import { HealthStats } from '@/app/admin/health/actions';
 
-// --- Mock Data ---
+// Static fallback service list for when health checks table is empty
+const STATIC_SERVICES = [
+    { name: 'Supabase (Database)', check_type: 'database' },
+    { name: 'Auth Service', check_type: 'api' },
+    { name: 'Background Sync', check_type: 'sync' },
+    { name: 'Cron Jobs', check_type: 'cron' },
+    { name: 'File Storage', check_type: 'storage' },
+    { name: 'AI Service', check_type: 'ai_service' },
+    { name: 'Notifications', check_type: 'notification' },
+]
 
-const SYNC_QUEUE_DEPTH = Array.from({ length: 24 }, (_, i) => ({
-    hour: `${i}:00`,
-    depth: Math.floor(Math.random() * 200) + (i > 8 && i < 18 ? 300 : 50),
-}));
+const CHECK_TYPE_LABEL: Record<string, string> = {
+    database: 'Supabase (Database)',
+    api: 'Auth / API Service',
+    sync: 'Background Sync',
+    cron: 'Cron Jobs',
+    storage: 'File Storage',
+    ai_service: 'AI Models',
+    notification: 'Push Notifications',
+    overall: 'Overall',
+}
 
-const API_LATENCY_DATA = Array.from({ length: 24 }, (_, i) => ({
-    hour: `${i}:00`,
-    p50: Math.floor(Math.random() * 50) + 100,
-    p95: Math.floor(Math.random() * 100) + 200,
-    p99: Math.floor(Math.random() * 200) + 350,
-}));
+const STATUS_CONFIG = {
+    healthy:  { dot: 'bg-green-500', text: 'text-green-700', label: 'Operational' },
+    degraded: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'Degraded' },
+    down:     { dot: 'bg-red-500',   text: 'text-red-700',   label: 'Down' },
+    unknown:  { dot: 'bg-gray-400',  text: 'text-gray-500',  label: 'Unknown' },
+}
 
-const DB_GROWTH_DATA = Array.from({ length: 30 }, (_, i) => ({
-    day: i + 1,
-    size: 1.5 + (i * 0.02) + (Math.random() * 0.01),
-}));
+function formatTime(ts: string) {
+    return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
 
-const SERVICES = [
-    { name: 'Supabase (Database)', status: 'Operational', uptime: '99.99%', health: 'HEALTHY' },
-    { name: 'Auth Service', status: 'Operational', uptime: '100%', health: 'HEALTHY' },
-    { name: 'File Storage', status: 'Operational', uptime: '99.95%', health: 'HEALTHY' },
-    { name: 'AI Models (ONNX)', status: 'Operational', uptime: '99.98%', health: 'HEALTHY' },
-    { name: 'OMR Processing', status: 'Degraded', uptime: '98.42%', health: 'DEGRADED' },
-    { name: 'Background Sync', status: 'Operational', uptime: '99.99%', health: 'HEALTHY' },
-    { name: 'Push Notifications', status: 'Operational', uptime: '99.90%', health: 'HEALTHY' },
-];
+interface Props {
+    stats: HealthStats
+}
 
-const ERROR_LOG = [
-    { time: '14:22:10', service: 'OMR Processing', error: 'Timeout waiting for worker', count: 12, status: 'Investigating' },
-    { time: '14:15:05', service: 'Push Notifications', error: 'FCM Token Invalid', count: 4, status: 'Resolved' },
-    { time: '13:58:22', service: 'Sync Service', error: 'Payload size limit exceeded', count: 1, status: 'Resolved' },
-    { time: '12:10:44', service: 'Auth Service', error: 'MFA SMS Provider Latency', count: 8, status: 'Resolved' },
-];
-
-const DB_TABLES = [
-    { name: 'children', rows: '450,230', size: '412 MB' },
-    { name: 'questionnaire_responses', rows: '1,240,591', size: '890 MB' },
-    { name: 'screening_sessions', rows: '382,100', size: '210 MB' },
-    { name: 'user_logs', rows: '5,102,400', size: '540 MB' },
-];
-
-// --- Sub-components ---
-
-const KPIChartCard = ({ label, value, sub, icon, colorClass, statusIcon }: any) => (
-    <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm transition-all hover:shadow-md">
+const KPICard = ({ label, value, sub, icon, colorClass, statusIcon }: {
+    label: string; value: string; sub: string; icon: React.ReactNode;
+    colorClass: string; statusIcon: React.ReactNode;
+}) => (
+    <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm">
         <div className="flex justify-between items-start mb-4">
-            <div className={`p-2 bg-gray-50 rounded-lg ${colorClass}`}>
-                {icon}
-            </div>
+            <div className={`p-2 bg-gray-50 rounded-lg ${colorClass}`}>{icon}</div>
             {statusIcon}
         </div>
-        <div>
-            <p className="text-[28px] font-bold text-black leading-tight">{value}</p>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
-            <p className={`text-[11px] font-medium mt-1 ${colorClass}`}>{sub}</p>
-        </div>
+        <p className="text-[28px] font-bold text-black leading-tight">{value}</p>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+        <p className={`text-[11px] font-medium mt-1 ${colorClass}`}>{sub}</p>
     </div>
-);
+)
 
-const SystemHealth: React.FC = () => {
-    const overallHealth: 'HEALTHY' | 'DEGRADED' | 'ISSUE' = 'DEGRADED';
+const SystemHealth: React.FC<Props> = ({ stats }) => {
+    const router = useRouter()
+    const [isPending, startTransition] = useTransition()
+
+    const { syncQueue, healthChecks, auditCount24h } = stats
+
+    // Derive overall health from health checks
+    const hasDown     = healthChecks.some(h => h.status === 'down')
+    const hasDegraded = healthChecks.some(h => h.status === 'degraded')
+    const overallHealth = healthChecks.length === 0
+        ? 'unknown'
+        : hasDown ? 'down' : hasDegraded ? 'degraded' : 'healthy'
+
+    // Build service rows: merge static list with real health checks
+    const healthByType = Object.fromEntries(healthChecks.map(h => [h.check_type, h]))
+    const serviceRows = STATIC_SERVICES.map(s => {
+        const real = healthByType[s.check_type]
+        return {
+            name: CHECK_TYPE_LABEL[s.check_type] ?? s.name,
+            status: real?.status ?? 'unknown' as const,
+            responseMs: real?.response_time_ms ?? null,
+            checkedAt: real?.checked_at ?? null,
+        }
+    })
+
+    // Sync queue breakdown chart data
+    const syncChartData = syncQueue.byTable.map(r => ({
+        table: r.table_name.replace('_', ' '),
+        count: r.count,
+    }))
+
+    const handleRefresh = () => {
+        startTransition(() => { router.refresh() })
+    }
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-[24px] font-semibold text-black leading-tight">System Health</h1>
-                <div className="flex items-center space-x-3">
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded text-[13px] font-bold hover:bg-gray-50 text-gray-700 transition-all">
-                        <RefreshCw size={16} />
-                        <span>Refresh All</span>
-                    </button>
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-black text-white rounded text-[13px] font-bold hover:bg-gray-800 transition-all">
-                        <ShieldCheck size={16} />
-                        <span>Security Audit</span>
-                    </button>
-                </div>
+                <button
+                    onClick={handleRefresh}
+                    disabled={isPending}
+                    className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded text-[13px] font-bold hover:bg-gray-50 text-gray-700 transition-all disabled:opacity-50"
+                >
+                    <RefreshCw size={16} className={isPending ? 'animate-spin' : ''} />
+                    <span>{isPending ? 'Refreshing…' : 'Refresh'}</span>
+                </button>
             </div>
 
             {/* Status Banner */}
-            {overallHealth === 'DEGRADED' ? (
-                <div className="w-full bg-[#FEF3C7] border border-[#FDE68A] rounded-xl p-4 flex items-center justify-between animate-in fade-in duration-500">
-                    <div className="flex items-center space-x-3 text-[#92400E]">
-                        <AlertTriangle size={20} />
-                        <div>
-                            <p className="text-[14px] font-bold uppercase tracking-tight">Degraded performance — sync queue elevated</p>
-                            <p className="text-[12px] opacity-80">Sync service is operating above p95 latency thresholds. Investigating OMR worker scaling.</p>
-                        </div>
-                    </div>
-                    <button className="text-[12px] font-bold text-[#92400E] underline">View Incident Log</button>
+            {overallHealth === 'unknown' && (
+                <div className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center space-x-3 text-gray-600">
+                    <Info size={20} />
+                    <p className="text-[14px] font-bold uppercase tracking-tight">No health check data — checks run automatically via cron jobs.</p>
                 </div>
-            ) : overallHealth === 'HEALTHY' ? (
-                <div className="w-full bg-[#DCFCE7] border border-[#BBF7D0] rounded-xl p-4 flex items-center space-x-3 text-[#166534] animate-in fade-in duration-500">
+            )}
+            {overallHealth === 'healthy' && (
+                <div className="w-full bg-[#DCFCE7] border border-[#BBF7D0] rounded-xl p-4 flex items-center space-x-3 text-[#166534]">
                     <CheckCircle2 size={20} />
                     <p className="text-[14px] font-bold uppercase tracking-tight">All systems operational</p>
                 </div>
-            ) : (
-                <div className="w-full bg-[#FEE2E2] border border-[#FECACA] rounded-xl p-4 flex items-center space-x-3 text-[#991B1B] animate-in fade-in duration-500">
+            )}
+            {overallHealth === 'degraded' && (
+                <div className="w-full bg-[#FEF3C7] border border-[#FDE68A] rounded-xl p-4 flex items-center justify-between text-[#92400E]">
+                    <div className="flex items-center space-x-3">
+                        <AlertTriangle size={20} />
+                        <p className="text-[14px] font-bold uppercase tracking-tight">Degraded — some services below threshold</p>
+                    </div>
+                </div>
+            )}
+            {overallHealth === 'down' && (
+                <div className="w-full bg-[#FEE2E2] border border-[#FECACA] rounded-xl p-4 flex items-center space-x-3 text-[#991B1B]">
                     <XCircle size={20} />
-                    <p className="text-[14px] font-bold uppercase tracking-tight">System issue detected — see details below</p>
+                    <p className="text-[14px] font-bold uppercase tracking-tight">Service outage detected — see service status below</p>
                 </div>
             )}
 
             {/* KPI Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <KPIChartCard
-                    label="UPTIME (30d)"
-                    value="99.8%"
-                    sub="Stable"
-                    icon={<Clock size={18} />}
-                    colorClass="text-green-600"
-                    statusIcon={<CheckCircle2 size={16} className="text-green-500" />}
-                />
-                <KPIChartCard
-                    label="API LATENCY"
-                    value="142ms"
-                    sub="Healthy"
-                    icon={<Zap size={18} />}
-                    colorClass="text-green-600"
-                    statusIcon={<CheckCircle2 size={16} className="text-green-500" />}
-                />
-                <KPIChartCard
-                    label="SYNC QUEUE"
-                    value="342"
-                    sub="Elevated"
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <KPICard
+                    label="Sync Queue Pending"
+                    value={syncQueue.total.toLocaleString()}
+                    sub={syncQueue.total === 0 ? 'Queue clear' : syncQueue.total > 500 ? 'Elevated' : 'Normal'}
                     icon={<Activity size={18} />}
-                    colorClass="text-amber-600"
-                    statusIcon={<AlertTriangle size={16} className="text-amber-500" />}
+                    colorClass={syncQueue.total > 500 ? 'text-amber-600' : 'text-green-600'}
+                    statusIcon={syncQueue.total > 500
+                        ? <AlertTriangle size={16} className="text-amber-500" />
+                        : <CheckCircle2 size={16} className="text-green-500" />}
                 />
-                <KPIChartCard
-                    label="ERRORS (24h)"
-                    value="0"
-                    sub="Optimal"
-                    icon={<AlertTriangle size={18} />}
-                    colorClass="text-green-600"
-                    statusIcon={<CheckCircle2 size={16} className="text-green-500" />}
+                <KPICard
+                    label="Sync Errors"
+                    value={syncQueue.recentErrors.length.toString()}
+                    sub={syncQueue.recentErrors.length === 0 ? 'No errors' : 'Check error log'}
+                    icon={<Zap size={18} />}
+                    colorClass={syncQueue.recentErrors.length > 0 ? 'text-red-600' : 'text-green-600'}
+                    statusIcon={syncQueue.recentErrors.length > 0
+                        ? <AlertTriangle size={16} className="text-red-500" />
+                        : <CheckCircle2 size={16} className="text-green-500" />}
                 />
-                <KPIChartCard
-                    label="DB SIZE"
-                    value="2.1 GB"
-                    sub="Capacity: 10GB"
-                    icon={<Database size={18} />}
+                <KPICard
+                    label="Audit Events (24h)"
+                    value={auditCount24h.toLocaleString()}
+                    sub="Admin actions logged"
+                    icon={<Clock size={18} />}
                     colorClass="text-gray-500"
                     statusIcon={<Info size={16} className="text-gray-400" />}
+                />
+                <KPICard
+                    label="Services Monitored"
+                    value={healthChecks.length === 0 ? '—' : serviceRows.filter(s => s.status === 'healthy').length + '/' + serviceRows.length}
+                    sub={healthChecks.length === 0 ? 'Awaiting checks' : 'Healthy'}
+                    icon={<Server size={18} />}
+                    colorClass={healthChecks.length === 0 ? 'text-gray-400' : 'text-green-600'}
+                    statusIcon={healthChecks.length === 0
+                        ? <Info size={16} className="text-gray-400" />
+                        : <CheckCircle2 size={16} className="text-green-500" />}
                 />
             </div>
 
             {/* Row 2: Service Status & Sync Queue */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Card A: Service Status */}
+                {/* Service Status */}
                 <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm flex flex-col">
                     <div className="p-5 border-b border-gray-50 flex items-center justify-between">
                         <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">Service Status</h3>
-                        <span className="text-[11px] font-bold text-gray-400">Total: 7 Services</span>
+                        <span className="text-[11px] font-bold text-gray-400">
+                            {healthChecks.length === 0 ? 'No checks run yet' : `Last checked: ${formatTime(healthChecks[0].checked_at)}`}
+                        </span>
                     </div>
-                    <div className="p-0 overflow-hidden flex-1">
+                    <div className="overflow-hidden flex-1">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
                                     <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Service</th>
                                     <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
-                                    <th className="px-6 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Uptime</th>
+                                    <th className="px-6 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Response</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {SERVICES.map((s, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 text-[13px] font-medium text-black">{s.name}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center space-x-2">
-                                                <div className={`w-2 h-2 rounded-full ${s.health === 'HEALTHY' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`} />
-                                                <span className={`text-[11px] font-bold uppercase tracking-tight ${s.health === 'HEALTHY' ? 'text-green-700' : 'text-amber-700'}`}>{s.status}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right text-[12px] font-mono font-bold text-gray-500">{s.uptime}</td>
-                                    </tr>
-                                ))}
+                                {serviceRows.map((s, idx) => {
+                                    const cfg = STATUS_CONFIG[s.status]
+                                    return (
+                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 text-[13px] font-medium text-black">{s.name}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className={`w-2 h-2 rounded-full ${cfg.dot} ${s.status === 'healthy' ? 'shadow-[0_0_8px_rgba(34,197,94,0.4)]' : ''}`} />
+                                                    <span className={`text-[11px] font-bold uppercase tracking-tight ${cfg.text}`}>{cfg.label}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right text-[12px] font-mono font-bold text-gray-500">
+                                                {s.responseMs !== null ? `${s.responseMs}ms` : '—'}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                {/* Card B: Sync Queue */}
+                {/* Sync Queue */}
                 <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm flex flex-col">
                     <div className="p-5 border-b border-gray-50">
-                        <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">Sync Queue Status</h3>
+                        <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">Sync Queue Breakdown</h3>
                     </div>
                     <div className="p-6 flex flex-col flex-1">
-                        <div className="flex justify-between items-end mb-6">
-                            <div>
-                                <p className="text-[24px] font-bold text-black">342 items pending</p>
-                                <p className="text-[12px] text-gray-500">Avg processing: <span className="text-black font-bold">12/min</span></p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Breakdown</p>
-                                <p className="text-[10px] font-medium text-gray-500 flex items-center justify-end flex-wrap gap-x-3 gap-y-1">
-                                    <span>Children: <b className="text-black">120</b></span>
-                                    <span>Responses: <b className="text-black">89</b></span>
-                                    <span>Observations: <b className="text-black">45</b></span>
-                                    <span>Flags: <b className="text-black">12</b></span>
-                                    <span>Protocols: <b className="text-black">76</b></span>
-                                </p>
-                            </div>
+                        <div className="mb-6">
+                            <p className="text-[24px] font-bold text-black">
+                                {syncQueue.total.toLocaleString()} item{syncQueue.total !== 1 ? 's' : ''} pending
+                            </p>
+                            <p className="text-[12px] text-gray-500 mt-1">Unsynced records by table</p>
                         </div>
-                        <div className="flex-1 h-[220px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={SYNC_QUEUE_DEPTH}>
-                                    <defs>
-                                        <linearGradient id="colorDepth" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#000000" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#000000" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
-                                    <XAxis dataKey="hour" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
-                                    <YAxis fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
-                                    <Tooltip
-                                        contentStyle={{ border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '11px' }}
-                                    />
-                                    <Area type="monotone" dataKey="depth" stroke="#000000" fillOpacity={1} fill="url(#colorDepth)" strokeWidth={2} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            {/* Row 3: Error Log & API Response */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Error Log */}
-                <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm flex flex-col">
-                    <div className="p-5 border-b border-gray-50 flex items-center justify-between">
-                        <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">Error Log (Last 24h)</h3>
-                        <button className="text-[11px] font-bold text-blue-600 hover:underline">Download full log</button>
-                    </div>
-                    <div className="p-0 overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</th>
-                                    <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Service</th>
-                                    <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Error</th>
-                                    <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {ERROR_LOG.map((err, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 text-[12px] font-mono text-gray-400">{err.time}</td>
-                                        <td className="px-6 py-4 text-[13px] font-bold text-black">{err.service}</td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-[12px] text-gray-600 leading-tight">{err.error}</p>
-                                            <p className="text-[10px] font-bold text-red-500 mt-1 uppercase tracking-tight">Occurred {err.count} times</p>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${err.status === 'Investigating' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
-                                                }`}>
-                                                {err.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* API Latency Chart */}
-                <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm p-6 flex flex-col">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">API Response Time (24h)</h3>
-                        <div className="flex space-x-3 text-[10px] font-bold uppercase">
-                            <span className="flex items-center"><div className="w-2 h-2 bg-gray-300 rounded-full mr-1.5" /> P50</span>
-                            <span className="flex items-center"><div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5" /> P95</span>
-                            <span className="flex items-center"><div className="w-2 h-2 bg-black rounded-full mr-1.5" /> P99</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={API_LATENCY_DATA}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
-                                <XAxis dataKey="hour" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
-                                <YAxis fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} label={{ value: 'ms', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#999' }} />
-                                <Tooltip
-                                    contentStyle={{ border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '11px' }}
-                                />
-                                <Line type="monotone" dataKey="p50" stroke="#D1D5DB" strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="p95" stroke="#6B7280" strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="p99" stroke="#000000" strokeWidth={3} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-
-            {/* Row 4: Database Health */}
-            <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm p-6">
-                <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">Database Health & Growth</h3>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Table Stats */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Storage by Table</h4>
-                        <div className="space-y-4">
-                            {DB_TABLES.map((t, idx) => (
-                                <div key={idx} className="flex justify-between items-center group">
-                                    <div>
-                                        <p className="text-[13px] font-bold text-gray-800 group-hover:text-black">{t.name}</p>
-                                        <p className="text-[11px] text-gray-400">{t.rows} rows</p>
-                                    </div>
-                                    <span className="text-[13px] font-mono font-bold text-gray-500">{t.size}</span>
+                        {syncQueue.total === 0 ? (
+                            <div className="flex-1 flex items-center justify-center">
+                                <div className="text-center">
+                                    <CheckCircle2 size={32} className="text-green-400 mx-auto mb-2" />
+                                    <p className="text-[13px] font-bold text-gray-500">Sync queue is clear</p>
                                 </div>
-                            ))}
-                        </div>
-                        <div className="pt-6 border-t border-gray-100">
-                            <div className="flex justify-between items-center text-[13px]">
-                                <span className="font-bold text-gray-800">Total Utilization</span>
-                                <span className="font-bold text-black">2.1 GB / 10.0 GB</span>
                             </div>
-                            <div className="w-full h-2 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                                <div className="h-full bg-black w-[21%]" />
+                        ) : syncChartData.length > 0 ? (
+                            <div className="flex-1 min-h-[200px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={syncChartData}>
+                                        <defs>
+                                            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#000000" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#000000" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
+                                        <XAxis dataKey="table" fontSize={9} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
+                                        <YAxis fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
+                                        <Tooltip
+                                            contentStyle={{ border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '11px' }}
+                                        />
+                                        <Area type="monotone" dataKey="count" stroke="#000000" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Growth Chart */}
-                    <div className="lg:col-span-2">
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">30-Day Storage Growth (GB)</h4>
-                            <span className="text-[11px] font-bold text-green-600">+0.6 GB this month</span>
-                        </div>
-                        <div className="h-[200px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={DB_GROWTH_DATA}>
-                                    <defs>
-                                        <linearGradient id="colorSize" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#000000" stopOpacity={0.05} />
-                                            <stop offset="95%" stopColor="#000000" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
-                                    <XAxis dataKey="day" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
-                                    <YAxis domain={['auto', 'auto']} fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#999' }} />
-                                    <Tooltip
-                                        contentStyle={{ border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '11px' }}
-                                        labelFormatter={(label) => `Day ${label}`}
-                                    />
-                                    <Area type="monotone" dataKey="size" stroke="#000000" fillOpacity={1} fill="url(#colorSize)" strokeWidth={2} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {syncQueue.byTable.map(r => (
+                                    <div key={r.table_name} className="flex justify-between items-center py-2 border-b border-gray-50">
+                                        <span className="text-[13px] font-medium text-gray-700">{r.table_name}</span>
+                                        <span className="text-[13px] font-bold text-black">{r.count}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Footer Info */}
+            {/* Sync Error Log */}
+            <div className="bg-white border border-[#E5E5E5] rounded-xl shadow-sm flex flex-col">
+                <div className="p-5 border-b border-gray-50 flex items-center justify-between">
+                    <h3 className="text-[13px] font-bold text-black uppercase tracking-widest">
+                        Sync Error Log (recent)
+                    </h3>
+                    <span className="text-[11px] font-bold text-gray-400">{syncQueue.recentErrors.length} errors</span>
+                </div>
+                {syncQueue.recentErrors.length === 0 ? (
+                    <div className="flex items-center justify-center py-12 text-center">
+                        <div>
+                            <CheckCircle2 size={28} className="text-green-400 mx-auto mb-2" />
+                            <p className="text-[13px] font-bold text-gray-500">No sync errors recorded</p>
+                        </div>
+                    </div>
+                ) : (
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Table</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Operation</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Error</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {syncQueue.recentErrors.map((err, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 text-[12px] font-mono text-gray-400 whitespace-nowrap">
+                                        {formatTime(err.created_at)}
+                                    </td>
+                                    <td className="px-6 py-4 text-[13px] font-bold text-black">{err.table_name}</td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                                            {err.operation}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-[12px] text-gray-600 max-w-sm truncate">{err.error_message}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+
+            {/* Footer */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pb-8">
                 {[
-                    { icon: <Cpu size={16} />, label: 'CLUSTER NODES', val: '12 Active' },
-                    { icon: <MemoryStick size={16} />, label: 'RAM POOL', val: '48 GB Total' },
-                    { icon: <Network size={16} />, label: 'THROUGHPUT', val: '840 req/sec' },
-                    { icon: <ShieldCheck size={16} />, label: 'FIREWALL', val: 'IPS Engaged' },
-                ].map((item, idx) => (
-                    <div key={idx} className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                        <div className="text-gray-400">{item.icon}</div>
-                        <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">{item.label}</p>
-                            <p className="text-[13px] font-bold text-gray-700 leading-none">{item.val}</p>
+                    { icon: <Database size={16} />, label: 'Database',   val: healthByType['database']?.status ?? 'unknown' },
+                    { icon: <ShieldCheck size={16} />, label: 'Auth',    val: healthByType['api']?.status ?? 'unknown' },
+                    { icon: <Cpu size={16} />, label: 'AI Service',      val: healthByType['ai_service']?.status ?? 'unknown' },
+                    { icon: <Network size={16} />, label: 'Notifications', val: healthByType['notification']?.status ?? 'unknown' },
+                ].map((item, idx) => {
+                    const cfg = STATUS_CONFIG[item.val as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown
+                    return (
+                        <div key={idx} className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                            <div className="text-gray-400">{item.icon}</div>
+                            <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">{item.label}</p>
+                                <p className={`text-[13px] font-bold leading-none capitalize ${cfg.text}`}>{item.val}</p>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
         </div>
-    );
-};
+    )
+}
 
-const MemoryStick = ({ size, className }: { size: number, className?: string }) => (
-    <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-    >
-        <path d="M6 19v-3h12v3" />
-        <path d="M10 16v-5" />
-        <path d="M14 16v-5" />
-        <path d="M18 16V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v11" />
-    </svg>
-);
-
-export default SystemHealth;
+export default SystemHealth

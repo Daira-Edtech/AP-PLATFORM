@@ -1,33 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
     Bell, Mail, MessageSquare, Smartphone,
-    ToggleLeft, ToggleRight, Plus, ChevronDown,
+    Plus, ChevronDown,
     Edit2, Save, X, Info, Settings as SettingsIcon, AlertCircle,
-    CheckCircle2, Filter, Search, MoreHorizontal
+    CheckCircle2, Filter, Search, Loader2
 } from 'lucide-react';
-
-interface NotificationRule {
-    id: string;
-    event: string;
-    recipients: string;
-    channels: ('push' | 'email' | 'sms' | 'in-app')[];
-    enabled: boolean;
-}
-
-const INITIAL_RULES: NotificationRule[] = [
-    { id: '1', event: 'Flag raised (Urgent)', recipients: 'All Mandal Screeners in mandal', channels: ['push', 'sms'], enabled: true },
-    { id: '2', event: 'Flag escalated to CDPO', recipients: 'CDPO officer', channels: ['push', 'email'], enabled: true },
-    { id: '3', event: 'Flag escalated to District', recipients: 'DPO', channels: ['email', 'sms'], enabled: true },
-    { id: '4', event: 'Flag escalated to State', recipients: 'Commissioner', channels: ['email', 'sms', 'in-app'], enabled: true },
-    { id: '5', event: 'Referral overdue (>14 days)', recipients: 'Mandal Screener + CDPO', channels: ['push'], enabled: true },
-    { id: '6', event: 'Facility at capacity', recipients: 'DPO + Commissioner', channels: ['email'], enabled: true },
-    { id: '7', event: 'AWW inactive >7 days', recipients: 'CDPO', channels: ['in-app'], enabled: true },
-    { id: '8', event: 'Coverage drops below 50%', recipients: 'CDPO + DPO', channels: ['email'], enabled: true },
-    { id: '9', event: 'New user account created', recipients: 'Admin', channels: ['in-app'], enabled: true },
-    { id: '10', event: 'Password reset', recipients: 'Target user', channels: ['email', 'sms'], enabled: true },
-];
+import { NotificationRule, saveNotificationRules } from '@/app/admin/notifications/actions';
 
 const TEMPLATES = [
     { id: 't1', name: 'Flag Notification', subject: 'Urgent: New High-Priority Flag', lastEdited: '2 days ago' },
@@ -36,12 +16,30 @@ const TEMPLATES = [
     { id: 't4', name: 'User Onboarding', subject: 'Welcome to Jiveesha ECD Platform', lastEdited: '1 month ago' },
 ];
 
-const NotificationManager: React.FC = () => {
-    const [rules, setRules] = useState<NotificationRule[]>(INITIAL_RULES);
+interface Props {
+    initialRules: NotificationRule[];
+}
+
+const NotificationManager: React.FC<Props> = ({ initialRules }) => {
+    const [rules, setRules] = useState<NotificationRule[]>(initialRules);
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     const toggleRule = (id: string) => {
-        setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+        const next = rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r);
+        setRules(next);
+        setSaveStatus('idle');
+        startTransition(async () => {
+            try {
+                await saveNotificationRules(next);
+                setSaveStatus('success');
+                setTimeout(() => setSaveStatus('idle'), 3000);
+            } catch {
+                setSaveStatus('error');
+                setTimeout(() => setSaveStatus('idle'), 3000);
+            }
+        });
     };
 
     const getChannelIcon = (channel: string) => {
@@ -68,6 +66,18 @@ const NotificationManager: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Save status */}
+            {saveStatus === 'success' && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-[13px] font-bold">
+                    <CheckCircle2 size={16} className="text-green-600" /> Rule saved successfully.
+                </div>
+            )}
+            {saveStatus === 'error' && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-[13px] font-bold">
+                    <AlertCircle size={16} className="text-red-600" /> Failed to save rule. Please try again.
+                </div>
+            )}
 
             {/* ACTIVE RULES TABLE */}
             <section className="bg-white border border-[#E5E5E5] rounded-2xl shadow-sm overflow-hidden">
@@ -110,12 +120,16 @@ const NotificationManager: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); toggleRule(rule.id); }}
-                                            className={`w-10 h-6 rounded-full relative transition-colors ${rule.enabled ? 'bg-black' : 'bg-gray-200'}`}
-                                        >
-                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${rule.enabled ? 'left-5' : 'left-1'}`} />
-                                        </button>
+                                        <div className="flex items-center justify-center gap-2">
+                                            {isPending && <Loader2 size={12} className="animate-spin text-gray-400" />}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleRule(rule.id); }}
+                                                disabled={isPending}
+                                                className={`w-10 h-6 rounded-full relative transition-colors disabled:opacity-60 ${rule.enabled ? 'bg-black' : 'bg-gray-200'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${rule.enabled ? 'left-5' : 'left-1'}`} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

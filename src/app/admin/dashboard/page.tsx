@@ -19,16 +19,16 @@ export default async function DashboardPage() {
         { data: allProfiles },
         { data: auditLogs },
         { data: awcs },
-        { data: syncQueue }, // Assuming there's a table or just mock
+        { count: syncQueueCount },
     ] = await Promise.all([
         supabase.from('awcs').select('*', { count: 'exact', head: true }),
         supabase.from('mandals').select('*', { count: 'exact', head: true }),
         supabase.from('districts').select('*', { count: 'exact', head: true }),
         supabase.from('states').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('id, name, role, is_active, awc_id, mandal_id, district_id'),
-        supabase.from('audit_log').select('*').order('timestamp', { ascending: false }).limit(5),
+        supabase.from('audit_log').select('id, action, user_id, created_at').order('created_at', { ascending: false }).limit(5),
         supabase.from('awcs').select('id'),
-        supabase.from('sync_queue').select('*', { count: 'exact', head: true }).limit(0), // Mock/Placeholder
+        supabase.from('sync_queue').select('*', { count: 'exact', head: true }).eq('synced', false),
     ]);
 
     const profiles = allProfiles || [];
@@ -57,11 +57,12 @@ export default async function DashboardPage() {
     ];
 
     // SYSTEM KPIs
+    const pendingSync = syncQueueCount || 0;
     const SYSTEM_KPIS = [
         { label: 'Uptime', value: '99.9%', sub: 'Healthy', color: 'text-green-500', icon: <Activity size={18} /> },
-        { label: 'Sync Queue', value: '0', sub: 'Optimal', color: 'text-green-500', icon: <Database size={18} /> },
+        { label: 'Sync Queue', value: pendingSync.toString(), sub: pendingSync === 0 ? 'All synced' : 'Pending sync', color: pendingSync === 0 ? 'text-green-500' : 'text-amber-500', icon: <Database size={18} /> },
         { label: 'Errors (24h)', value: '0', sub: 'Optimal', color: 'text-green-500', icon: <ShieldAlert size={18} /> },
-        { label: 'Database', value: '1.2 GB', sub: 'Capacity: 10GB', color: 'text-gray-500', icon: <Database size={18} /> },
+        { label: 'Database', value: '—', sub: 'Supabase Cloud', color: 'text-gray-500', icon: <Database size={18} /> },
     ];
 
     // ASSIGNMENTS
@@ -76,10 +77,10 @@ export default async function DashboardPage() {
 
     // RECENT ACTIONS
     const RECENT_ACTIONS = (auditLogs || []).map(log => ({
-        icon: log.action.includes('Create') ? <Plus size={14} /> : <ArrowRight size={14} />,
-        desc: log.action,
-        admin: log.user_role || 'System',
-        time: new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        icon: log.action?.toLowerCase().includes('create') ? <Plus size={14} /> : <ArrowRight size={14} />,
+        desc: log.action || 'System action',
+        admin: 'Admin',
+        time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
     }));
 
     // GEOGRAPHIC COVERAGE
@@ -111,9 +112,9 @@ export default async function DashboardPage() {
             {/* Row 1: User KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {USER_KPIS.map((kpi, idx) => (
-                    <div key={idx} className="bg-white p-5 rounded-[12px] border border-[#E5E5E5] flex flex-col justify-between hover:shadow-sm transition-shadow">
+                    <div key={idx} className="bg-[#f5f5f5] p-5 rounded-[12px] border border-[#E5E5E5] flex flex-col justify-between hover:shadow-sm transition-shadow">
                         <div className="flex justify-between items-start mb-4">
-                            <div className={`p-2 bg-gray-50 rounded-lg ${kpi.color}`}>
+                            <div className={`p-2 bg-gray-50 rounded-[12px] ${kpi.color}`}>
                                 {kpi.icon}
                             </div>
                             {kpi.active < kpi.total && (
@@ -135,7 +136,7 @@ export default async function DashboardPage() {
             {/* Row 2: System KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {SYSTEM_KPIS.map((kpi, idx) => (
-                    <div key={idx} className="bg-white p-5 rounded-[12px] border border-[#E5E5E5] flex items-center space-x-4">
+                    <div key={idx} className="bg-[#f5f5f5] p-5 rounded-[12px] border border-[#E5E5E5] flex items-center space-x-4">
                         <div className={`p-3 bg-gray-50 rounded-full ${kpi.color}`}>
                             {kpi.icon}
                         </div>
@@ -155,7 +156,7 @@ export default async function DashboardPage() {
             {/* Row 3: Assignment Health & Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
                 {/* Card A: Assignment Health */}
-                <div className="lg:col-span-6 bg-white rounded-[12px] border border-[#E5E5E5] flex flex-col">
+                <div className="lg:col-span-6 bg-[#f5f5f5] rounded-[12px] border border-[#E5E5E5] flex flex-col">
                     <div className="p-6 border-b border-[#F5F5F5] flex justify-between items-center">
                         <h2 className="text-[14px] font-bold uppercase tracking-wider text-black">Assignment Status</h2>
                         <div className="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold flex items-center">
@@ -172,12 +173,12 @@ export default async function DashboardPage() {
                                         <span className="font-semibold text-gray-700">{role.role}</span>
                                         <span className="text-gray-500">
                                             <span className="font-bold text-black">{role.assigned.toLocaleString()}</span> assigned |
-                                            <span className="font-bold text-red-500"> {role.unassigned.toLocaleString()}</span> unassigned
+                                            <span className="font-bold text-[#888888]"> {role.unassigned.toLocaleString()}</span> unassigned
                                         </span>
                                     </div>
                                     <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                                        <div className="h-full bg-green-500" style={{ width: `${assignedPercent}%` }} />
-                                        <div className="h-full bg-red-400" style={{ width: `${100 - assignedPercent}%` }} />
+                                        <div className="h-full bg-[#fb923c]" style={{ width: `${assignedPercent}%` }} />
+                                        <div className="h-full bg-[var(--color-slate-mute)]" style={{ width: `${100 - assignedPercent}%` }} />
                                     </div>
                                 </div>
                             );
@@ -191,7 +192,7 @@ export default async function DashboardPage() {
                 </div>
 
                 {/* Card B: Recent Activity */}
-                <div className="lg:col-span-4 bg-white rounded-[12px] border border-[#E5E5E5] flex flex-col h-full">
+                <div className="lg:col-span-4 bg-[#f5f5f5] rounded-[12px] border border-[#E5E5E5] flex flex-col h-full">
                     <div className="p-6 border-b border-[#F5F5F5]">
                         <h2 className="text-[14px] font-bold uppercase tracking-wider text-black">Recent Admin Actions</h2>
                     </div>
@@ -228,7 +229,7 @@ export default async function DashboardPage() {
             {/* Row 4: Hierarchy Health & Action Items */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
                 {/* Card C: Hierarchy Health */}
-                <div className="bg-white rounded-[12px] border border-[#E5E5E5] flex flex-col">
+                <div className="bg-[#f5f5f5] rounded-[12px] border border-[#E5E5E5] flex flex-col">
                     <div className="p-6 border-b border-[#F5F5F5]">
                         <h2 className="text-[14px] font-bold uppercase tracking-wider text-black">Geographic Coverage</h2>
                     </div>
@@ -246,14 +247,14 @@ export default async function DashboardPage() {
                         </div>
 
                         <div className="mt-6 space-y-3">
-                            <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-center justify-between">
+                            <div className="p-3 bg-red-50 border border-red-100 rounded-[12px] flex items-center justify-between">
                                 <div className="flex items-center space-x-2 text-red-700">
                                     <AlertCircle size={14} />
                                     <span className="text-[12px] font-bold">AWCs without AWW</span>
                                 </div>
                                 <span className="text-red-700 font-bold text-[14px]">{awcsWithoutAww}</span>
                             </div>
-                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg flex items-center justify-between">
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-[12px] flex items-center justify-between">
                                 <div className="flex items-center space-x-2 text-amber-700">
                                     <AlertCircle size={14} />
                                     <span className="text-[12px] font-bold">Unassigned PERSONNEL</span>
@@ -270,7 +271,7 @@ export default async function DashboardPage() {
                 </div>
 
                 {/* Card D: Action Items */}
-                <div className="bg-white rounded-[12px] border border-[#E5E5E5] flex flex-col">
+                <div className="bg-[#f5f5f5] rounded-[12px] border border-[#E5E5E5] flex flex-col">
                     <div className="p-6 border-b border-[#F5F5F5]">
                         <h2 className="text-[14px] font-bold uppercase tracking-wider text-black">Action Items</h2>
                     </div>
@@ -279,7 +280,7 @@ export default async function DashboardPage() {
                             <a
                                 key={idx}
                                 href={item.link}
-                                className="flex items-center p-3 rounded-lg border border-gray-100 hover:border-black transition-all group"
+                                className="flex items-center p-3 rounded-[12px] border border-gray-100 hover:border-black transition-all group"
                             >
                                 <div className={`w-2 h-2 rounded-full mr-4 ${item.priority === 'red' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' :
                                         item.priority === 'amber' ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-green-500'

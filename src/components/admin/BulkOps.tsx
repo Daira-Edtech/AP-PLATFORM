@@ -79,6 +79,16 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
     const [bulkActionTargetIds, setBulkActionTargetIds] = useState<Set<string>>(new Set());
     const [selectedAction, setSelectedAction] = useState('');
 
+    // Toast + confirm state
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [assignConfirmPending, setAssignConfirmPending] = useState(false);
+    const [bulkActionConfirmPending, setBulkActionConfirmPending] = useState(false);
+
+    const showToast = (type: 'success' | 'error', message: string) => {
+        setToast({ type, message });
+        setTimeout(() => setToast(null), 3500);
+    };
+
     const supabase = createClient();
 
     // Cascading Fetchers
@@ -195,15 +205,19 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
                 throw new Error(data.error || 'Import failed');
             }
         } catch (err: any) {
-            alert(err.message);
+            showToast('error', err.message);
             setImportStep('UPLOAD');
         }
     };
 
     const handleBulkAssign = async () => {
         if (selectedAssignUserIds.size === 0) return;
-        if (!confirm(`Reassign ${selectedAssignUserIds.size} users?`)) return;
-
+        if (!assignConfirmPending) {
+            setAssignConfirmPending(true);
+            setTimeout(() => setAssignConfirmPending(false), 3000);
+            return;
+        }
+        setAssignConfirmPending(false);
         setActionLoading(true);
         try {
             await actions.bulkReassign(Array.from(selectedAssignUserIds), {
@@ -214,20 +228,23 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
                 panchayat_id: assignTarget.panchayat || null,
                 awc_id: assignTarget.awc || null
             });
-            alert('Reassignment successful');
-            window.location.reload();
+            showToast('success', `${selectedAssignUserIds.size} user(s) reassigned successfully`);
+            setSelectedAssignUserIds(new Set());
         } catch (err: any) {
-            alert('Error: ' + err.message);
+            showToast('error', 'Error: ' + err.message);
         } finally {
             setActionLoading(false);
         }
     };
 
-
     const handleBulkAction = async () => {
         if (bulkActionTargetIds.size === 0 || !selectedAction) return;
-        if (!confirm(`Perform "${selectedAction}" on ${bulkActionTargetIds.size} users?`)) return;
-
+        if (!bulkActionConfirmPending) {
+            setBulkActionConfirmPending(true);
+            setTimeout(() => setBulkActionConfirmPending(false), 3000);
+            return;
+        }
+        setBulkActionConfirmPending(false);
         setActionLoading(true);
         try {
             switch (selectedAction) {
@@ -241,13 +258,14 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
                     await actions.bulkDeleteUsers(Array.from(bulkActionTargetIds));
                     break;
                 default:
-                    alert('Action not implemented yet');
+                    showToast('error', `Action "${selectedAction}" is not implemented yet`);
+                    setActionLoading(false);
                     return;
             }
-            alert('Operation successful');
-            window.location.reload();
+            showToast('success', `"${selectedAction}" applied to ${bulkActionTargetIds.size} user(s)`);
+            setBulkActionTargetIds(new Set());
         } catch (err: any) {
-            alert('Error: ' + err.message);
+            showToast('error', 'Error: ' + err.message);
         } finally {
             setActionLoading(false);
         }
@@ -540,10 +558,12 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
                         <button
                             onClick={handleBulkAssign}
                             disabled={selectedAssignUserIds.size === 0 || actionLoading}
-                            className="px-8 py-3 bg-black text-white rounded-lg text-[13px] font-bold hover:bg-gray-800 disabled:opacity-50 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-black/5"
+                            className={`px-8 py-3 rounded-lg text-[13px] font-bold disabled:opacity-50 transition-all flex items-center justify-center space-x-2 shadow-lg ${
+                                assignConfirmPending ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-black text-white hover:bg-gray-800 shadow-black/5'
+                            }`}
                         >
                             <Icons.UserCheck size={16} />
-                            <span>{actionLoading ? 'Assigning...' : `Assign ${selectedAssignUserIds.size || ''} Users`}</span>
+                            <span>{actionLoading ? 'Assigning...' : assignConfirmPending ? `Confirm assign ${selectedAssignUserIds.size} users?` : `Assign ${selectedAssignUserIds.size || ''} Users`}</span>
                         </button>
                     </div>
                 </div>
@@ -575,9 +595,11 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
                             <button
                                 onClick={handleBulkAction}
                                 disabled={bulkActionTargetIds.size === 0 || !selectedAction || actionLoading}
-                                className="px-6 py-2 bg-black text-white rounded-lg text-[13px] font-bold hover:bg-gray-800 disabled:opacity-50"
+                                className={`px-6 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50 transition-all ${
+                                    bulkActionConfirmPending ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-black text-white hover:bg-gray-800'
+                                }`}
                             >
-                                {actionLoading ? 'Applying...' : `Apply to ${bulkActionTargetIds.size || ''} Selected`}
+                                {actionLoading ? 'Applying...' : bulkActionConfirmPending ? `Confirm "${selectedAction}"?` : `Apply to ${bulkActionTargetIds.size || ''} Selected`}
                             </button>
                         </div>
                     </div>
@@ -626,6 +648,13 @@ const BulkOps: React.FC<BulkOpsProps> = ({ users: initialUsers, states }) => {
 
     return (
         <div className="space-y-6">
+            {toast && (
+                <div className={`fixed top-4 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-bold border ${
+                    toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                    {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+                </div>
+            )}
             <div>
                 <h1 className="text-[24px] font-semibold text-black leading-tight">Bulk Operations</h1>
                 <p className="text-[13px] text-gray-500 tracking-tight">Manage user database at scale</p>

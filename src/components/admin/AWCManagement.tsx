@@ -54,6 +54,13 @@ const AWCManagement: React.FC = () => {
 
     const [editingAwc, setEditingAwc] = useState<any>(null);
     const [saving, setSaving] = useState(false);
+    const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const showToast = (type: 'success' | 'error', message: string) => {
+        setToast({ type, message });
+        setTimeout(() => setToast(null), 3500);
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -125,9 +132,10 @@ const AWCManagement: React.FC = () => {
 
     const handleCreate = async () => {
         if (!formData.name || !formData.code || !formData.sector_id || !formData.mandal_id) {
-            alert('Please fill mandatory fields (Name, Code, Mandal, Sector)');
+            setFormError('Please fill mandatory fields (Name, Code, Mandal, Sector)');
             return;
         }
+        setFormError(null);
         setSaving(true);
         try {
             const payload = {
@@ -151,7 +159,7 @@ const AWCManagement: React.FC = () => {
             });
             fetchData();
         } catch (err: any) {
-            alert('Error: ' + err.message);
+            showToast('error', 'Error: ' + err.message);
         } finally {
             setSaving(false);
         }
@@ -201,6 +209,13 @@ const AWCManagement: React.FC = () => {
 
     return (
         <div className="space-y-6">
+            {toast && (
+                <div className={`fixed top-4 right-4 z-[200] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-bold border ${
+                    toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                    {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+                </div>
+            )}
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-[24px] font-semibold text-black leading-tight">AWC Management</h1>
@@ -601,7 +616,12 @@ const AWCManagement: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="p-8 border-t border-gray-100 bg-white">
+                        <div className="p-8 border-t border-gray-100 bg-white space-y-3">
+                            {formError && (
+                                <div className="text-[12px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                    {formError}
+                                </div>
+                            )}
                             <button
                                 onClick={handleCreate}
                                 disabled={saving}

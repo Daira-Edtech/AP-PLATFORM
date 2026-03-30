@@ -29,13 +29,13 @@ export default async function AdminLayout({
 
 
     return (
-        <div className="min-h-screen bg-white font-sans text-slate-900">
+        <div className="min-h-screen bg-app-bg font-sans text-dark-slate">
             <Sidebar />
 
-            <div className="pl-64 flex flex-col min-h-screen transition-all duration-300 bg-white">
+            <div className="pl-64 flex flex-col min-h-screen transition-all duration-300 bg-app-bg">
                 <Header user={user} profile={profile as Profile} />
 
-                <main className="flex-1 p-8 overflow-y-auto bg-white">
+                <main className="flex-1 p-8 overflow-y-auto bg-app-bg">
                     {children}
                 </main>
             </div>

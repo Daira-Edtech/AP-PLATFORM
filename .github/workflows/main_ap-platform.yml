@@ -43,6 +43,9 @@ jobs:
         with:
           name: node-app
           path: .next/standalone
+          # .next/ is a dot-folder; upload-artifact v4 skips hidden files
+          # by default, which would ship server.js without the compiled app.
+          include-hidden-files: true
 
   deploy:
     runs-on: ubuntu-latest
